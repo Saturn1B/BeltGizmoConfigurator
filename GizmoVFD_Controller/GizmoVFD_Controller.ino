@@ -92,112 +92,141 @@ const uint16_t refreshPerDigitUs = 1200;
 // ANIMATION STATE
 // ======================================================
 
+enum AnimationStepType {
+
+  STEP_STATIC,
+  STEP_SCROLL,
+  STEP_BLINK,
+  STEP_HOLD
+};
+
+struct AnimationStep {
+
+  uint8_t type;
+
+  char text[64];
+
+  uint16_t duration;
+
+  uint16_t speed;
+};
+
 struct AnimationState {
 
+  uint8_t currentStep = 0;
+
+  unsigned long stepStartTime = 0;
+
+  unsigned long lastFrameTime = 0;
+
   uint16_t frameIndex = 0;
-  unsigned long lastUpdate = 0;
 
   bool blinkState = false;
 };
 
 AnimationState anim;
 
+#define MAX_ANIMATION_STEPS 8
+
+AnimationStep animationSteps[MAX_ANIMATION_STEPS];
+
+uint8_t animationStepCount = 0;
+
 String getFrame() {
 
-  switch (config.animationMode) {
+  if (animationStepCount == 0) {
+    return "        ";
+  }
 
-    // =================================================
-    // 0 = STATIC / SCROLL
-    // =================================================
-    case 0: {
+  AnimationStep &step =
+    animationSteps[anim.currentStep];
 
-      int realLen = strlen(config.text);
+  // =================================================
+  // STATIC
+  // =================================================
 
-      // static mode
-      if (realLen <= 8 && !config.forceScroll) {
+  if (step.type == STEP_STATIC) {
 
-        String fixed = "";
+    String s = step.text;
 
-        for (int i = 0; i < realLen; i++) {
+    s.toUpperCase();
 
-          char c = config.text[i];
-          if (c >= 'a' && c <= 'z') c -= 32;
-          fixed += c;
-        }
-
-        while (fixed.length() < 8) fixed += " ";
-
-        return fixed;
-      }
-
-      // scrolling
-      int scrollLen = scrollMessage.length();
-
-      String window = "";
-
-      for (int i = 0; i < 8; i++) {
-
-        int idx = (scrollIndex + i) % scrollLen;
-        window += scrollMessage.charAt(idx);
-      }
-
-      return window;
+    while (s.length() < 8) {
+      s += " ";
     }
 
-    // =================================================
-    // 1 = BLINK
-    // =================================================
-    case 1: {
+    return s;
+  }
 
-      unsigned long now = millis();
+  // =================================================
+  // SCROLL
+  // =================================================
 
-      if (now - anim.lastUpdate >= 500) {
+  if (step.type == STEP_SCROLL) {
 
-        anim.lastUpdate = now;
-        anim.blinkState = !anim.blinkState;
-      }
+    String msg = step.text;
 
-      if (anim.blinkState) {
+    msg.toUpperCase();
 
-        String s = "";
-
-        for (int i = 0; i < 8; i++) {
-
-          if (i < strlen(config.text)) {
-            char c = config.text[i];
-            if (c >= 'a' && c <= 'z') c -= 32;
-            s += c;
-          } else {
-            s += " ";
-          }
-        }
-
-        return s;
-      }
-
-      return "        "; // blank
+    for (int i = 0; i < config.scrollSpacing; i++) {
+      msg += " ";
     }
 
-    // =================================================
-    // 2 = RAIN (placeholder base)
-    // =================================================
-    case 2: {
+    int len = msg.length();
 
-      // simple "moving offset" example
-      String s = "        ";
+    String window = "";
 
-      int pos = anim.frameIndex % 8;
+    for (int i = 0; i < 8; i++) {
 
-      if (pos < strlen(config.text)) {
-        s[pos] = config.text[pos];
+      int idx =
+        (anim.frameIndex + i) % len;
+
+      window += msg.charAt(idx);
+    }
+
+    return window;
+  }
+
+  // =================================================
+  // BLINK
+  // =================================================
+
+  if (step.type == STEP_BLINK) {
+
+    if (anim.blinkState) {
+
+      String s = step.text;
+
+      s.toUpperCase();
+
+      while (s.length() < 8) {
+        s += " ";
       }
 
       return s;
     }
 
-    default:
-      return "        ";
+    return "        ";
   }
+
+  // =================================================
+  // HOLD
+  // =================================================
+
+  if (step.type == STEP_HOLD) {
+
+    String s = step.text;
+
+    s.toUpperCase();
+
+    while (s.length() < 8) {
+      s += " ";
+    }
+
+    return s;
+  }
+
+  return "        ";
 }
 
 // ======================================================
@@ -362,6 +391,8 @@ void handleCommand(String cmd) {
 
     prepareMessage();
 
+    buildDefaultAnimation();
+
     Serial.println("OK TEXT");
   }
 
@@ -370,6 +401,10 @@ void handleCommand(String cmd) {
   else if (cmd.startsWith("SPEED=")) {
 
     config.scrollSpeed = cmd.substring(6).toInt();
+
+    prepareMessage();
+
+    buildDefaultAnimation();
 
     Serial.println("OK SPEED");
   }
@@ -382,6 +417,8 @@ void handleCommand(String cmd) {
 
     prepareMessage();
 
+    buildDefaultAnimation();
+
     Serial.println("OK SPACING");
   }
 
@@ -393,6 +430,8 @@ void handleCommand(String cmd) {
 
   prepareMessage();
 
+  buildDefaultAnimation();
+
   Serial.println("OK FORCE");
   }
 
@@ -401,6 +440,10 @@ void handleCommand(String cmd) {
   else if (cmd.startsWith("ANIM=")) {
 
     config.animationMode = cmd.substring(5).toInt();
+
+    prepareMessage();
+
+    buildDefaultAnimation();
 
     Serial.println("OK ANIM");
   }
@@ -644,6 +687,61 @@ void prepareMessage() {
   lastScrollMs = millis();
 }
 
+void buildDefaultAnimation() {
+
+  animationStepCount = 0;
+
+  // =================================================
+  // SHORT TEXT
+  // =================================================
+
+  if (strlen(config.text) <= 8 && !config.forceScroll) {
+
+    AnimationStep step;
+
+    step.type = STEP_STATIC;
+
+    strcpy(step.text, config.text);
+
+    step.duration = 0;
+
+    step.speed = 0;
+
+    animationSteps[0] = step;
+
+    animationStepCount = 1;
+  }
+
+  // =================================================
+  // LONG TEXT
+  // =================================================
+
+  else {
+
+    AnimationStep step;
+
+    step.type = STEP_SCROLL;
+
+    strcpy(step.text, config.text);
+
+    step.duration = 0;
+
+    step.speed = config.scrollSpeed;
+
+    animationSteps[0] = step;
+
+    animationStepCount = 1;
+  }
+
+  anim.currentStep = 0;
+
+  anim.stepStartTime = millis();
+
+  anim.lastFrameTime = millis();
+
+  anim.frameIndex = 0;
+}
+
 // ======================================================
 // WINDOW BUILD
 // ======================================================
@@ -710,31 +808,64 @@ void updateDisplayBuffer() {
 
 void updateAnimationState() {
 
+  if (animationStepCount == 0) {
+    return;
+  }
+
   unsigned long now = millis();
 
-  switch (config.animationMode) {
+  AnimationStep &step =
+    animationSteps[anim.currentStep];
 
-    case 0: {
+  // =================================================
+  // SCROLL
+  // =================================================
 
-      if (now - lastScrollMs >= config.scrollSpeed) {
+  if (step.type == STEP_SCROLL) {
 
-        lastScrollMs = now;
+    if (now - anim.lastFrameTime >= step.speed) {
 
-        scrollIndex++;
-
-        if (scrollIndex >= scrollMessage.length()) {
-          scrollIndex = 0;
-        }
-      }
-      break;
-    }
-
-    case 1:
-    case 2: {
+      anim.lastFrameTime = now;
 
       anim.frameIndex++;
+    }
+  }
 
-      break;
+  // =================================================
+  // BLINK
+  // =================================================
+
+  if (step.type == STEP_BLINK) {
+
+    if (now - anim.lastFrameTime >= step.speed) {
+
+      anim.lastFrameTime = now;
+
+      anim.blinkState = !anim.blinkState;
+    }
+  }
+
+  // =================================================
+  // STEP DURATION
+  // =================================================
+
+  if (step.duration > 0) {
+
+    if (now - anim.stepStartTime >= step.duration) {
+
+      anim.currentStep++;
+
+      if (anim.currentStep >= animationStepCount) {
+        anim.currentStep = 0;
+      }
+
+      anim.stepStartTime = now;
+
+      anim.lastFrameTime = now;
+
+      anim.frameIndex = 0;
+
+      anim.blinkState = false;
     }
   }
 }
@@ -779,6 +910,7 @@ void setup() {
   loadConfig();
 
   prepareMessage();
+  buildDefaultAnimation();
 
   updateDisplayBuffer();
 }
