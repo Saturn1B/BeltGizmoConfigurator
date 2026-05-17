@@ -20,6 +20,8 @@
 
 #define EEPROM_MAGIC 0xBEEF
 
+#define MAX_ANIMATION_STEPS 8
+
 // ======================================================
 // CONFIG VARIABLES
 // ======================================================
@@ -42,15 +44,6 @@ struct DisplayConfig {
 };
 
 DisplayConfig config;
-
-struct EEPROMData {
-
-  uint16_t magic;
-
-  DisplayConfig cfg;
-};
-
-EEPROMData ee;
 
 // ======================================================
 // LOGICAL SEGMENT IDS
@@ -111,6 +104,19 @@ struct AnimationStep {
   uint16_t speed;
 };
 
+struct EEPROMData {
+
+  uint16_t magic;
+
+  DisplayConfig cfg;
+
+  uint8_t stepCount;
+
+  AnimationStep steps[MAX_ANIMATION_STEPS];
+};
+
+EEPROMData ee;
+
 struct AnimationState {
 
   uint8_t currentStep = 0;
@@ -125,8 +131,6 @@ struct AnimationState {
 };
 
 AnimationState anim;
-
-#define MAX_ANIMATION_STEPS 8
 
 AnimationStep animationSteps[MAX_ANIMATION_STEPS];
 
@@ -245,6 +249,12 @@ void saveConfig() {
 
   ee.cfg = config;
 
+  ee.stepCount = animationStepCount;
+
+  for (int i = 0; i < animationStepCount; i++) {
+    ee.steps[i] = animationSteps[i];
+  }
+
   EEPROM.put(0, ee);
 }
 
@@ -262,6 +272,16 @@ void loadConfig() {
   }
 
   config = ee.cfg;
+
+  animationStepCount = ee.stepCount;
+
+  for (int i = 0; i < animationStepCount; i++) {
+    animationSteps[i] = ee.steps[i];
+  }
+
+  if (animationStepCount > MAX_ANIMATION_STEPS) {
+    animationStepCount = 0;
+  }
 }
 
 void setDefaultConfig() {
@@ -375,6 +395,62 @@ bool parseMapString(
   return true;
 }
 
+uint8_t parseStepType(String s) {
+
+  s.toUpperCase();
+
+  if (s == "STATIC") return STEP_STATIC;
+  if (s == "SCROLL") return STEP_SCROLL;
+  if (s == "BLINK")  return STEP_BLINK;
+  if (s == "HOLD")   return STEP_HOLD;
+
+  return 255;
+}
+
+void clearAnimationSteps() {
+
+  animationStepCount = 0;
+
+  anim.currentStep = 0;
+
+  anim.stepStartTime = millis();
+
+  anim.lastFrameTime = millis();
+
+  anim.frameIndex = 0;
+
+  anim.blinkState = false;
+}
+
+bool addAnimationStep(
+    uint8_t type,
+    String text,
+    uint16_t duration,
+    uint16_t speed
+) {
+
+  if (animationStepCount >= MAX_ANIMATION_STEPS) {
+    return false;
+  }
+
+  AnimationStep &step =
+    animationSteps[animationStepCount];
+
+  step.type = type;
+
+  text.toUpperCase();
+
+  text.toCharArray(step.text, 64);
+
+  step.duration = duration;
+
+  step.speed = speed;
+
+  animationStepCount++;
+
+  return true;
+}
+
 void handleCommand(String cmd) {
 
   cmd.trim();
@@ -482,6 +558,139 @@ void handleCommand(String cmd) {
 
       Serial.println("ERR GRIDMAP");
     }
+  }
+
+  // ---------------- CLEAR STEPS ----------------
+
+  else if (cmd == "CLEARSTEPS") {
+
+    clearAnimationSteps();
+
+    Serial.println("OK CLEAR");
+  }
+
+  // ---------------- ADD STEP ----------------
+
+  else if (cmd.startsWith("ADDSTEP=")) {
+
+    String data = cmd.substring(8);
+
+    int p1 = data.indexOf(',');
+    int p2 = data.indexOf(',', p1 + 1);
+    int p3 = data.indexOf(',', p2 + 1);
+
+    if (p1 == -1 || p2 == -1 || p3 == -1) {
+
+      Serial.println("ERR STEP FORMAT");
+      return;
+    }
+
+    String typeStr =
+      data.substring(0, p1);
+
+    String textStr =
+      data.substring(p1 + 1, p2);
+
+    String durationStr =
+      data.substring(p2 + 1, p3);
+
+    String speedStr =
+      data.substring(p3 + 1);
+
+    uint8_t type =
+      parseStepType(typeStr);
+
+    if (type == 255) {
+
+      Serial.println("ERR STEP TYPE");
+      return;
+    }
+
+    uint16_t duration =
+      durationStr.toInt();
+
+    uint16_t speed =
+      speedStr.toInt();
+
+    if (addAnimationStep(
+          type,
+          textStr,
+          duration,
+          speed
+        )) {
+
+      Serial.println("OK STEP");
+
+    } else {
+
+      Serial.println("ERR STEP FULL");
+    }
+  }
+
+  // ---------------- PLAY ----------------
+
+  else if (cmd == "PLAY") {
+
+    anim.currentStep = 0;
+
+    anim.stepStartTime = millis();
+
+    anim.lastFrameTime = millis();
+
+    anim.frameIndex = 0;
+
+    anim.blinkState = false;
+
+    Serial.println("OK PLAY");
+  }
+
+  // ---------------- LIST STEPS ----------------
+
+  else if (cmd == "LISTSTEPS") {
+
+    Serial.print("COUNT=");
+    Serial.println(animationStepCount);
+
+    for (int i = 0; i < animationStepCount; i++) {
+
+      AnimationStep &s = animationSteps[i];
+
+      Serial.print(i);
+      Serial.print(":");
+
+      switch (s.type) {
+
+        case STEP_STATIC:
+          Serial.print("STATIC");
+          break;
+
+        case STEP_SCROLL:
+          Serial.print("SCROLL");
+          break;
+
+        case STEP_BLINK:
+          Serial.print("BLINK");
+          break;
+
+        case STEP_HOLD:
+          Serial.print("HOLD");
+          break;
+      }
+
+      Serial.print(",");
+
+      Serial.print(s.text);
+
+      Serial.print(",");
+
+      Serial.print(s.duration);
+
+      Serial.print(",");
+
+      Serial.println(s.speed);
+    }
+
+    Serial.println("ENDSTEPS");
   }
 
   // ---------------- SAVE ----------------
@@ -859,6 +1068,9 @@ void updateAnimationState() {
         anim.currentStep = 0;
       }
 
+      Serial.print("STEP=");
+      Serial.println(anim.currentStep);
+
       anim.stepStartTime = now;
 
       anim.lastFrameTime = now;
@@ -910,7 +1122,16 @@ void setup() {
   loadConfig();
 
   prepareMessage();
-  buildDefaultAnimation();
+
+  if (animationStepCount == 0) {
+    buildDefaultAnimation();
+  }
+
+  anim.currentStep = 0;
+  anim.stepStartTime = millis();
+  anim.lastFrameTime = millis();
+  anim.frameIndex = 0;
+  anim.blinkState = false;
 
   updateDisplayBuffer();
 }
