@@ -20,6 +20,9 @@
 
 #define EEPROM_MAGIC 0xBEEF
 
+#define EEPROM_CONFIG_ADDR 0
+#define EEPROM_STEPS_ADDR 128
+
 #define MAX_ANIMATION_STEPS 8
 
 // ======================================================
@@ -90,7 +93,7 @@ enum AnimationStepType {
   STEP_STATIC,
   STEP_SCROLL,
   STEP_BLINK,
-  STEP_HOLD
+  STEP_TYPEWRITER
 };
 
 struct AnimationStep {
@@ -111,11 +114,7 @@ struct EEPROMData {
   DisplayConfig cfg;
 
   uint8_t stepCount;
-
-  AnimationStep steps[MAX_ANIMATION_STEPS];
 };
-
-EEPROMData ee;
 
 struct AnimationState {
 
@@ -135,6 +134,8 @@ AnimationState anim;
 AnimationStep animationSteps[MAX_ANIMATION_STEPS];
 
 uint8_t animationStepCount = 0;
+
+bool customAnimationLoaded = false;
 
 String getFrame() {
 
@@ -214,20 +215,30 @@ String getFrame() {
   }
 
   // =================================================
-  // HOLD
+  // TYPEWRITER
   // =================================================
 
-  if (step.type == STEP_HOLD) {
+  if (step.type == STEP_TYPEWRITER) {
 
     String s = step.text;
 
     s.toUpperCase();
 
-    while (s.length() < 8) {
-      s += " ";
+    int visible =
+      anim.frameIndex;
+
+    if (visible > s.length()) {
+      visible = s.length();
     }
 
-    return s;
+    String out =
+      s.substring(0, visible);
+
+    while (out.length() < 8) {
+      out += " ";
+    }
+
+    return out;
   }
 
   return "        ";
@@ -245,26 +256,37 @@ String serialBuffer = "";
 
 void saveConfig() {
 
+  EEPROMData ee;
+
   ee.magic = EEPROM_MAGIC;
 
   ee.cfg = config;
 
   ee.stepCount = animationStepCount;
 
-  for (int i = 0; i < animationStepCount; i++) {
-    ee.steps[i] = animationSteps[i];
-  }
+  EEPROM.put(EEPROM_CONFIG_ADDR, ee);
 
-  EEPROM.put(0, ee);
+  int addr = EEPROM_STEPS_ADDR;
+
+  for (int i = 0; i < animationStepCount; i++) {
+
+    EEPROM.put(addr, animationSteps[i]);
+
+    addr += sizeof(AnimationStep);
+  }
 }
 
 void loadConfig() {
 
-  EEPROM.get(0, ee);
+  EEPROMData ee;
+
+  EEPROM.get(EEPROM_CONFIG_ADDR, ee);
 
   if (ee.magic != EEPROM_MAGIC) {
 
     setDefaultConfig();
+
+    animationStepCount = 0;
 
     saveConfig();
 
@@ -275,13 +297,21 @@ void loadConfig() {
 
   animationStepCount = ee.stepCount;
 
-  for (int i = 0; i < animationStepCount; i++) {
-    animationSteps[i] = ee.steps[i];
-  }
-
   if (animationStepCount > MAX_ANIMATION_STEPS) {
     animationStepCount = 0;
   }
+
+  int addr = EEPROM_STEPS_ADDR;
+
+  for (int i = 0; i < animationStepCount; i++) {
+
+    EEPROM.get(addr, animationSteps[i]);
+
+    addr += sizeof(AnimationStep);
+  }
+
+  customAnimationLoaded =
+    (animationStepCount > 0);
 }
 
 void setDefaultConfig() {
@@ -402,7 +432,7 @@ uint8_t parseStepType(String s) {
   if (s == "STATIC") return STEP_STATIC;
   if (s == "SCROLL") return STEP_SCROLL;
   if (s == "BLINK")  return STEP_BLINK;
-  if (s == "HOLD")   return STEP_HOLD;
+  if (s == "TYPEWRITER") return STEP_TYPEWRITER;
 
   return 255;
 }
@@ -410,6 +440,8 @@ uint8_t parseStepType(String s) {
 void clearAnimationSteps() {
 
   animationStepCount = 0;
+
+  customAnimationLoaded = false;
 
   anim.currentStep = 0;
 
@@ -447,6 +479,8 @@ bool addAnimationStep(
   step.speed = speed;
 
   animationStepCount++;
+
+  customAnimationLoaded = true;
 
   return true;
 }
@@ -567,6 +601,8 @@ void handleCommand(String cmd) {
     clearAnimationSteps();
 
     Serial.println("OK CLEAR");
+
+    saveConfig();
   }
 
   // ---------------- ADD STEP ----------------
@@ -621,6 +657,8 @@ void handleCommand(String cmd) {
 
       Serial.println("OK STEP");
 
+      saveConfig();
+
     } else {
 
       Serial.println("ERR STEP FULL");
@@ -672,8 +710,8 @@ void handleCommand(String cmd) {
           Serial.print("BLINK");
           break;
 
-        case STEP_HOLD:
-          Serial.print("HOLD");
+        case STEP_TYPEWRITER:
+          Serial.print("TYPEWRITER");
           break;
       }
 
@@ -898,6 +936,10 @@ void prepareMessage() {
 
 void buildDefaultAnimation() {
 
+  if (customAnimationLoaded) {
+    return;
+  }
+
   animationStepCount = 0;
 
   // =================================================
@@ -1037,6 +1079,22 @@ void updateAnimationState() {
       anim.lastFrameTime = now;
 
       anim.frameIndex++;
+    }
+  }
+
+  // =================================================
+  // TYPEWRITER
+  // =================================================
+
+  if (step.type == STEP_TYPEWRITER) {
+
+    if (now - anim.lastFrameTime >= step.speed) {
+
+      anim.lastFrameTime = now;
+
+      if (anim.frameIndex < strlen(step.text)) {
+        anim.frameIndex++;
+      }
     }
   }
 
