@@ -74,7 +74,6 @@ DEFAULT_TEXT = "NO_GHOST"
 DEFAULT_SPEED = 250
 DEFAULT_SPACING = 8
 DEFAULT_FORCE_SCROLL = False
-DEFAULT_ANIMATION = "0 - Scroll"
 
 # =====================================================
 # SERIAL
@@ -632,22 +631,30 @@ def reset_force_scroll():
     update_scroll_controls()
 
 
-def reset_animation():
-
-    if ser is None:
-        return
-
-    animationVar.set(DEFAULT_ANIMATION)
-
 # =====================================================
 # DISPLAY MODE
 # =====================================================
 
 def on_display_mode_changed(value):
 
-    # Placeholder for future UI switching
+    simpleSettingsFrame.pack_forget()
+    advancedSettingsFrame.pack_forget()
 
-    print(f"Display mode changed to: {value}")
+    if value == "simple":
+
+        simpleSettingsFrame.pack(
+            fill="x",
+            padx=10,
+            pady=10
+        )
+
+    else:
+
+        advancedSettingsFrame.pack(
+            fill="x",
+            padx=10,
+            pady=10
+        )
 
 # =====================================================
 # UI HELPERS
@@ -1340,8 +1347,6 @@ app.after(
     lambda: app.state("zoomed")
 )
 
-animationVar = StringVar(value="0")
-
 forceScrollVar = ctk.BooleanVar(value=False)
 
 displayModeVar = ctk.StringVar(value="simple")
@@ -1656,6 +1661,26 @@ separator2 = ctk.CTkFrame(
 separator2.pack(fill="x", padx=20, pady=(0, 15))
 
 # =====================================================
+# SETTINGS MODE CONTAINERS
+# =====================================================
+
+simpleSettingsFrame = ctk.CTkFrame(
+    displayFrame,
+    fg_color="transparent"
+)
+
+advancedSettingsFrame = ctk.CTkFrame(
+    displayFrame,
+    fg_color="transparent"
+)
+
+simpleSettingsFrame.pack(
+    fill="x",
+    padx=10,
+    pady=10
+)
+
+# =====================================================
 # TEXT ROW
 # =====================================================
 
@@ -1665,10 +1690,10 @@ textLabel = ctk.CTkLabel(
     font=("Arial", 15, "bold")
 )
 
-textLabel.pack()
+textLabel.pack(in_=simpleSettingsFrame)
 
 textRow = ctk.CTkFrame(
-    displayFrame,
+    simpleSettingsFrame,
     fg_color="transparent"
 )
 
@@ -1699,7 +1724,7 @@ textEntry.bind(
 # =====================================================
 
 speedRow = ctk.CTkFrame(
-    displayFrame,
+    simpleSettingsFrame,
     fg_color="transparent"
 )
 
@@ -1744,7 +1769,7 @@ speedRow.pack()
 # =====================================================
 
 spacingRow = ctk.CTkFrame(
-    displayFrame,
+    simpleSettingsFrame,
     fg_color="transparent"
 )
 
@@ -1790,7 +1815,7 @@ spacingRow.pack()
 # =====================================================
 
 forceScrollRow = ctk.CTkFrame(
-    displayFrame,
+    simpleSettingsFrame,
     fg_color="transparent"
 )
 
@@ -1817,74 +1842,255 @@ forceScrollVar.trace_add(
 forceScrollRow.pack(pady=(0, 18))
 
 # =====================================================
-# ANIMATION FRAME
+# ADVANCED ANIMATION EDITOR
 # =====================================================
 
-animFrame = ctk.CTkFrame(
-    topFrame,
-    width=240,
-    height=250,
-    corner_radius=14,
-    fg_color="#1a1a1a",
-    border_width=2,
-    border_color="#2b2b2b"
+advancedTitle = ctk.CTkLabel(
+    advancedSettingsFrame,
+    text="Advanced Animation Sequence",
+    font=("Arial", 18, "bold")
 )
 
-animFrame.pack(
-    side="left",
-    padx=10,
-    fill="y"
-)
-
-animFrame.pack_configure(ipadx=10, ipady=10)
-
-animFrame.pack_propagate(False)
-
-ctk.CTkLabel(
-    animFrame,
-    text="Animation",
-    font=("Arial", 20, "bold")
-).pack(pady=(18, 10))
-
-separator3 = ctk.CTkFrame(
-    animFrame,
-    height=2,
-    fg_color="#444444"
-)
-
-separator3.pack(fill="x", padx=20, pady=(0, 15))
+advancedTitle.pack(pady=(6, 8))
 
 # =====================================================
-# ANIMATION ROW
+# STEP LIST
 # =====================================================
 
-animationRow = ctk.CTkFrame(
-    animFrame,
+stepListFrame = ctk.CTkScrollableFrame(
+    advancedSettingsFrame,
+    width=560,
+    height=120,
+    fg_color="#111111"
+)
+
+# =====================================================
+# COLUMN HEADERS
+# =====================================================
+
+headerRow = ctk.CTkFrame(
+    advancedSettingsFrame,
     fg_color="transparent"
 )
 
-animationRow.pack(pady=10)
-
-animationMenu = ctk.CTkOptionMenu(
-    animationRow,
-    values=[
-        "0 - Scroll",
-        "1 - Blink",
-        "2 - Rain"
-    ],
-    variable=animationVar,
-    width=180,
-    height=36
+headerRow.pack(
+    padx=14,
+    pady=(0, 4),
+    anchor="w"
 )
 
-animationMenu.pack(side="left")
+ctk.CTkLabel(
+    headerRow,
+    text="Animation",
+    font=("Arial", 13, "bold")
+).grid(row=0, column=0, padx=(0, 12), sticky="w")
 
-animationResetButton = create_reset_button(
-    animationRow,
-    reset_animation
+ctk.CTkLabel(
+    headerRow,
+    text="Text",
+    font=("Arial", 13, "bold")
+).grid(row=0, column=1, padx=(0, 12), sticky="w")
+
+ctk.CTkLabel(
+    headerRow,
+    text="Duration",
+    font=("Arial", 13, "bold")
+).grid(row=0, column=2, padx=(0, 12), sticky="w")
+
+ctk.CTkLabel(
+    headerRow,
+    text="Speed",
+    font=("Arial", 13, "bold")
+).grid(row=0, column=3, padx=(0, 12), sticky="w")
+
+# MATCH COLUMN WIDTHS TO ROW WIDGETS
+
+headerRow.grid_columnconfigure(0, minsize=112)
+headerRow.grid_columnconfigure(1, minsize=172)
+headerRow.grid_columnconfigure(2, minsize=82)
+headerRow.grid_columnconfigure(3, minsize=82)
+
+# =====================================================
+# SHOW STEP LIST
+# =====================================================
+
+stepListFrame.pack(
+    fill="x",
+    padx=10,
+    pady=(0, 10)
 )
 
-animationResetButton.pack(side="left", padx=(8, 0))
+# =====================================================
+# STEP STORAGE
+# =====================================================
+
+advancedSteps = []
+
+# =====================================================
+# REMOVE STEP
+# =====================================================
+
+def remove_advanced_step(stepFrame):
+
+    if stepFrame in advancedSteps:
+
+        advancedSteps.remove(stepFrame)
+
+    stepFrame.destroy()
+
+# =====================================================
+# ADD STEP
+# =====================================================
+
+def add_advanced_step(
+    anim="SCROLL",
+    text="HELLO",
+    duration="2000",
+    speed="150"
+):
+
+    row = ctk.CTkFrame(
+        stepListFrame,
+        fg_color="#202020",
+        corner_radius=8
+    )
+
+    row.pack(
+        fill="x",
+        pady=2,
+        padx=4
+    )
+
+    # ------------------------------------------
+    # ANIMATION TYPE
+    # ------------------------------------------
+
+    animVar = ctk.StringVar(value=anim)
+
+    animMenu = ctk.CTkOptionMenu(
+        row,
+        values=[
+            "STATIC",
+            "SCROLL",
+            "BLINK",
+            "TYPEWRITER"
+        ],
+        variable=animVar,
+        width=100,
+        height=30
+    )
+
+
+    animMenu.grid(
+        row=0,
+        column=0,
+        padx=(8, 12),
+        pady=8,
+        sticky="w"
+    )
+
+    # ------------------------------------------
+    # TEXT
+    # ------------------------------------------
+
+    textEntry = ctk.CTkEntry(
+        row,
+        width=160,
+        height=30
+    )
+
+    textEntry.insert(0, text)
+
+    textEntry.grid(
+        row=0,
+        column=1,
+        padx=(0, 12),
+        sticky="w"
+    )
+
+    # ------------------------------------------
+    # DURATION
+    # ------------------------------------------
+
+    durationEntry = ctk.CTkEntry(
+        row,
+        width=70,
+        height=30
+    )
+
+    durationEntry.insert(0, duration)
+
+    durationEntry.grid(
+        row=0,
+        column=2,
+        padx=(0, 12),
+        sticky="w"
+    )
+
+    # ------------------------------------------
+    # SPEED
+    # ------------------------------------------
+
+    speedEntry = ctk.CTkEntry(
+        row,
+        width=70,
+        height=30
+    )
+
+    speedEntry.insert(0, speed)
+
+    speedEntry.grid(
+        row=0,
+        column=3,
+        padx=(0, 12),
+        sticky="w"
+    )
+
+    # ------------------------------------------
+    # REMOVE BUTTON
+    # ------------------------------------------
+
+    removeButton = ctk.CTkButton(
+        row,
+        text="✕",
+        width=28,
+        height=28,
+        fg_color="#992222",
+        hover_color="#bb3333",
+        command=lambda: remove_advanced_step(row)
+    )
+
+    removeButton.grid(
+        row=0,
+        column=4,
+        padx=(0, 8)
+    )
+
+    row.animVar = animVar
+    row.textEntry = textEntry
+    row.durationEntry = durationEntry
+    row.speedEntry = speedEntry
+
+    advancedSteps.append(row)
+
+# =====================================================
+# ADD BUTTON
+# =====================================================
+
+addStepButton = ctk.CTkButton(
+    advancedSettingsFrame,
+    text="+ Add Step",
+    height=36,
+    command=add_advanced_step
+)
+
+addStepButton.pack(
+    padx=10,
+    pady=(0, 10),
+    fill="x"
+)
+
+
 
 # =====================================================
 # PREVIEW FRAME
@@ -2565,9 +2771,6 @@ def set_reset_buttons_visible(visible):
         if not forceResetButton.winfo_manager():
             forceResetButton.pack(side="left", padx=(8, 0))
 
-        if not animationResetButton.winfo_manager():
-            animationResetButton.pack(side="left", padx=(8, 0))
-
     # -----------------------------------------
     # HIDE
     # -----------------------------------------
@@ -2581,8 +2784,6 @@ def set_reset_buttons_visible(visible):
         spacingResetButton.pack_forget()
 
         forceResetButton.pack_forget()
-
-        animationResetButton.pack_forget()
 
 # =====================================================
 # CONTROL ENABLING
@@ -2604,7 +2805,18 @@ def set_controls_enabled(enabled):
 
     forceScrollCheck.configure(state=state)
 
-    animationMenu.configure(state=state)
+    modeToggle.configure(state=state)
+
+    addStepButton.configure(state=state)
+
+    for step in advancedSteps:
+
+        for child in step.winfo_children():
+
+            try:
+                child.configure(state=state)
+            except:
+                pass
 
     # ==========================================
     # HARDWARE CONTROLS
