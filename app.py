@@ -640,6 +640,16 @@ def reset_animation():
     animationVar.set(DEFAULT_ANIMATION)
 
 # =====================================================
+# DISPLAY MODE
+# =====================================================
+
+def on_display_mode_changed(value):
+
+    # Placeholder for future UI switching
+
+    print(f"Display mode changed to: {value}")
+
+# =====================================================
 # UI HELPERS
 # =====================================================
 
@@ -1334,6 +1344,8 @@ animationVar = StringVar(value="0")
 
 forceScrollVar = ctk.BooleanVar(value=False)
 
+displayModeVar = ctk.StringVar(value="simple")
+
 # =====================================================
 # HARDWARE MAPPING DATA
 # =====================================================
@@ -1617,6 +1629,23 @@ ctk.CTkLabel(
     text="Display Settings",
     font=("Arial", 20, "bold")
 ).pack(pady=(18, 10))
+
+# =====================================================
+# DISPLAY MODE TOGGLE
+# =====================================================
+
+modeToggle = ctk.CTkSegmentedButton(
+    displayFrame,
+    values=["simple", "advanced"],
+    variable=displayModeVar,
+    command=on_display_mode_changed,
+    width=260,
+    height=34
+)
+
+modeToggle.pack(pady=(0, 12))
+
+modeToggle.set("simple")
 
 separator2 = ctk.CTkFrame(
     displayFrame,
