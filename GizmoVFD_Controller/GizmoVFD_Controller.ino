@@ -883,9 +883,6 @@ uint32_t charToSegments(char c) {
     case '=': return segMask(SEG_G) | segMask(SEG_D);
     case ' ': return 0;
     case '.': return segMask(SEG_DP);
-    case ',': return segMask(SEG_DP);
-    case '\'': return segMask(SEG_B);
-    case '"': return segMask(SEG_B) | segMask(SEG_F);
 
     default:  return 0;
   }
@@ -994,55 +991,65 @@ void buildDefaultAnimation() {
 }
 
 // ======================================================
-// WINDOW BUILD
+// WINDOW BUILD (FIXED TO PREVENT BLANKING MULTIPLE DOTS)
 // ======================================================
-
 void setWindowFromText(const String &txt, int startIndex) {
-
+  
+  // Create an array of 8 display tokens to precisely mirror the Python engine
+  String tokens[8];
   for (int i = 0; i < 8; i++) {
+    tokens[i] = " ";
+  }
 
-    int idx = startIndex + i;
+  int tokenCount = 0;
+  int char_index = startIndex;
 
-    uint32_t segs = 0;
+  // Process the animation string into structural display buckets
+  while (char_index < (int)txt.length() && tokenCount < 8) {
+    char current_char = txt.charAt(char_index);
 
-    if (idx >= 0 && idx < (int)txt.length()) {
-
-      char c = txt.charAt(idx);
-
-      if (c == '.' || c == ',') {
-
-        segs = segMask(SEG_DP);
-
+    // Scenario A: Current character is a standalone dot or comma
+    if (current_char == '.' || current_char == ',') {
+      tokens[tokenCount] = String(current_char);
+      char_index++;
+      tokenCount++;
+    }
+    // Scenario B: Current character is letters/numbers, look ahead for trailing dots
+    else {
+      if (char_index + 1 < (int)txt.length() && (txt.charAt(char_index + 1) == '.' || txt.charAt(char_index + 1) == ',')) {
+        // Securely combine them into a single token structure (e.g., "I.")
+        tokens[tokenCount] = String(current_char) + String(txt.charAt(char_index + 1));
+        char_index += 2; // Move past the merged punctuation point
       } else {
+        // Normal single character tracking
+        tokens[tokenCount] = String(current_char);
+        char_index++;
+      }
+      tokenCount++;
+    }
+  }
 
-        segs = charToSegments(c);
+  // Physically assign segment masks to display arrays matching your compiled tokens
+  for (int i = 0; i < 8; i++) {
+    uint32_t segs = 0;
+    String t = tokens[i];
 
-        if (idx + 1 < (int)txt.length()) {
-
-          char next = txt.charAt(idx + 1);
-
-          if (next == '.' || next == ',') {
-            segs |= segMask(SEG_DP);
-          }
+    if (t.length() > 0) {
+      char base_c = t.charAt(0);
+      
+      // If it's a merged punctuation point, isolate the base character for mapping
+      if ((base_c == '.' || base_c == ',') && t.length() == 1) {
+        segs = segMask(SEG_DP);
+      } else {
+        segs = charToSegments(base_c);
+        // If the token contains a dot, engage the DP mask concurrently
+        if (t.indexOf('.') != -1 || t.indexOf(',') != -1) {
+          segs |= segMask(SEG_DP);
         }
       }
     }
-
+    
     displayBuf[i] = segs;
-  }
-
-  for (int i = 0; i < 7; i++) {
-
-    int idx = startIndex + i + 1;
-
-    if (idx >= 0 && idx < (int)txt.length()) {
-
-      char c = txt.charAt(idx);
-
-      if (c == '.' || c == ',') {
-        displayBuf[i + 1] = 0;
-      }
-    }
   }
 }
 

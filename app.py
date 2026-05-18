@@ -60,11 +60,19 @@ SEGMENTS = {
     '-': "G",
     '_': "D",
     '=': "DG",
-    ' ': ""
+    ' ': "",
 }
 
 previewIndex = 0
 lastPreviewScroll = 0
+
+py_current_step = 0
+py_step_start_time = 0
+py_last_frame_time = 0
+py_frame_index = 0
+py_blink_state = False
+
+last_active_display_mode = "simple"
 
 # =====================================================
 # DEFAULT DISPLAY SETTINGS
@@ -158,7 +166,7 @@ def finish_connection(selected):
 
         set_status_state("connected_success")
 
-        app.after(200, load_config_from_arduino)
+        app.after(1000, load_config_from_arduino)
 
     except Exception:
 
@@ -178,175 +186,142 @@ def finish_connection(selected):
         set_status_state("failed_connection")
 
 def load_config_from_arduino():
-
     set_status_state("loading")
-
     global ser
 
     if ser is None:
         return
 
     try:
-
         ser.reset_input_buffer()
-
         ser.write("GETCONFIG\n".encode())
-
         config = {}
-
         start = time.time()
 
         while time.time() - start < 2:
-
             if ser.in_waiting:
-
                 line = ser.readline().decode().strip()
-
                 if "=" in line:
-
                     key, value = line.split("=", 1)
-
                     config[key] = value
-
                 elif line == "ENDCONFIG":
                     break
 
         # ==========================================
         # LOAD MAPPINGS
         # ==========================================
-
         ser.reset_input_buffer()
-
         ser.write("GETMAP\n".encode())
-
         segMap = []
         gridMap = []
-
         start = time.time()
 
         while time.time() - start < 2:
-
             if ser.in_waiting:
-
                 line = ser.readline().decode().strip()
-
                 if line.startswith("SEGMAP="):
-
-                    segMap = [
-                        int(x)
-                        for x in line[7:].split(",")
-                    ]
-
+                    segMap = [int(x) for x in line[7:].split(",")]
                 elif line.startswith("GRIDMAP="):
-
-                    gridMap = [
-                        int(x)
-                        for x in line[8:].split(",")
-                    ]
-
+                    gridMap = [int(x) for x in line[8:].split(",")]
                 elif line == "ENDMAP":
                     break
 
         # ==========================================
         # APPLY SEGMENT MAPPINGS
         # ==========================================
-
-        segmentNames = [
-            "SEG_E",
-            "SEG_D",
-            "SEG_C",
-            "SEG_DP",
-            "SEG_A",
-            "SEG_G",
-            "SEG_F",
-            "SEG_B"
-        ]
-
+        segmentNames = ["SEG_E", "SEG_D", "SEG_C", "SEG_DP", "SEG_A", "SEG_G", "SEG_F", "SEG_B"]
         for logicalIndex, outputPin in enumerate(segMap):
-
             pinName = f"OUT{outputPin}"
-
             if pinName in mappingVars:
-
-                mappingVars[pinName].set(
-                    segmentNames[logicalIndex]
-                )
+                mappingVars[pinName].set(segmentNames[logicalIndex])
 
         # ==========================================
         # APPLY GRID MAPPINGS
         # ==========================================
-
         for gridIndex, outputPin in enumerate(gridMap):
-
             pinName = f"OUT{outputPin}"
-
             if pinName in mappingVars:
-
-                mappingVars[pinName].set(
-                    f"GRID_{gridIndex + 1}"
-                )
+                mappingVars[pinName].set(f"GRID_{gridIndex + 1}")
 
         # ==========================================
         # RESET UNUSED OUTPUTS
         # ==========================================
-
         usedOutputs = set(segMap + gridMap)
-
         for pinName, var in mappingVars.items():
-
             outNum = int(pinName.replace("OUT", ""))
-
             if outNum not in usedOutputs:
-
                 var.set("None")
 
         validate_mappings()
 
-        if "TEXT" in config:
+        # ==========================================
+        # NEW: LOAD ADVANCED ANIMATION STEPS
+        # ==========================================
+        # Clear existing visual UI step rows before filling them
+        for step in advancedSteps[:]:
+            try:
+                step.destroy()
+            except:
+                pass
+        advancedSteps.clear()
 
+        ser.reset_input_buffer()
+        ser.write("LISTSTEPS\n".encode())
+        start = time.time()
+        
+        while time.time() - start < 2:
+            if ser.in_waiting:
+                line = ser.readline().decode().strip()
+                if line == "ENDSTEPS":
+                    break
+                elif line.startswith("COUNT="):
+                    continue
+                elif ":" in line:
+                    # Format: "0:SCROLL,TEXT,2000,150"
+                    prefix, data = line.split(":", 1)
+                    tokens = data.split(",")
+                    if len(tokens) == 4:
+                        anim_type, anim_text, anim_duration, anim_speed = tokens
+                        # Populate UI row using the loaded values
+                        add_advanced_step(
+                            anim=anim_type,
+                            text=anim_text,
+                            duration=anim_duration,
+                            speed=anim_speed
+                        )
+
+        # ==========================================
+        # APPLY BASE SETTINGS
+        # ==========================================
+        if "TEXT" in config:
             textEntry.delete(0, "end")
             textEntry.insert(0, config["TEXT"])
 
         if "SPEED" in config:
-
             speed = int(config["SPEED"])
-
             speedSlider.set(speed)
-
             update_speed(speed)
 
         if "SPACING" in config:
-
             spacing = int(config["SPACING"])
-
             spacingSlider.set(spacing)
-
             update_spacing(spacing)
 
         if "FORCESCROLL" in config:
-
-            forceScrollVar.set(
-                config["FORCESCROLL"] == "1"
-            )
-
+            forceScrollVar.set(config["FORCESCROLL"] == "1")
             update_scroll_controls()
 
         if "ANIM" in config:
+            mode = "advanced" if config["ANIM"] == "1" else "simple"
+            displayModeVar.set(mode)
+            on_display_mode_changed(mode)
 
-            animationVar.set(config["ANIM"])
-
-        statusLabel.configure(
-            text="Configuration loaded"
-        )
-
+        statusLabel.configure(text="Configuration loaded")
         set_status_state("idle")
 
     except Exception as e:
-
-        statusLabel.configure(
-            text=f"Load failed"
-        )
-
+        print("LOAD ERROR:", e)
+        statusLabel.configure(text=f"Load failed")
         set_status_state("error")
 
 def send_line(line):
@@ -356,143 +331,122 @@ def send_line(line):
     if ser is None:
         return
 
+    if not ser.is_open:
+        return
+
     ser.write((line + "\n").encode())
 
     ser.flush()
 
-    time.sleep(0.03)
+    time.sleep(0.08)
 
 def save_to_arduino():
-
-    global ser
+    global ser, last_active_display_mode
 
     if ser is None:
-
-        statusLabel.configure(
-            text="Arduino not connected"
-        )
-
+        statusLabel.configure(text="Arduino not connected")
         set_status_state("error")
-
         return
 
     try:
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
         text = textEntry.get()
-
         speed = int(speedSlider.get())
-
         spacing = int(spacingSlider.get())
-
         force = 1 if forceScrollVar.get() else 0
 
-        anim = animationVar.get()
+        # Use the last viewed display mode (even if saving from the Hardware tab)
+        mode = last_active_display_mode
 
         # ==========================================
         # SEND CONFIG
         # ==========================================
-
         send_line(f"TEXT={text}")
-
         send_line(f"SPEED={speed}")
-
         send_line(f"SPACING={spacing}")
-
         send_line(f"FORCESCROLL={force}")
 
-        send_line(f"ANIM={anim}")
+        # ------------------------------------------
+        # MODE 1: SIMPLE MODE SAVE (Wipe Advanced Data)
+        # ------------------------------------------
+        if mode == "simple":
+            send_line("ANIM=0")
+            send_line("CLEARSTEPS") # Clear advanced steps off the Arduino completely
+            time.sleep(0.1)
+
+        # ------------------------------------------
+        # MODE 2: ADVANCED MODE SAVE (Save Both)
+        # ------------------------------------------
+        else:
+            send_line("ANIM=1")
+            send_line("CLEARSTEPS")
+            time.sleep(0.2)
+
+            if len(advancedSteps) == 0:
+                statusLabel.configure(text="No advanced steps defined")
+                return
+
+            for step in advancedSteps:
+                anim = step.animVar.get()
+                text = step.textEntry.get()
+                duration = step.durationEntry.get()
+                speed = step.speedEntry.get()
+
+                duration = duration.strip()
+                speed = speed.strip()
+
+                if duration == "": duration = "2000"
+                if speed == "": speed = "150"
+
+                anim = anim.strip().upper()
+                text = text.strip()
+
+                send_line(f"ADDSTEP={anim},{text},{duration},{speed}")
 
         # ==========================================
         # BUILD SEGMENT MAP
         # ==========================================
-
-        segmentOrder = [
-            "SEG_E",
-            "SEG_D",
-            "SEG_C",
-            "SEG_DP",
-            "SEG_A",
-            "SEG_G",
-            "SEG_F",
-            "SEG_B"
-        ]
-
+        segmentOrder = ["SEG_E", "SEG_D", "SEG_C", "SEG_DP", "SEG_A", "SEG_G", "SEG_F", "SEG_B"]
         segMap = []
-
         for segName in segmentOrder:
-
             found = -1
-
             for pinName, var in mappingVars.items():
-
                 if var.get() == segName:
-
-                    found = int(
-                        pinName.replace("OUT", "")
-                    )
-
+                    found = int(pinName.replace("OUT", ""))
                     break
-
             segMap.append(found)
 
         # ==========================================
         # BUILD GRID MAP
         # ==========================================
-
         gridMap = []
-
-        for i in range(1, 9):
-
+        for i in range(1, 8 + 1):
             gridName = f"GRID_{i}"
-
             found = -1
-
             for pinName, var in mappingVars.items():
-
                 if var.get() == gridName:
-
-                    found = int(
-                        pinName.replace("OUT", "")
-                    )
-
+                    found = int(pinName.replace("OUT", ""))
                     break
-
             gridMap.append(found)
 
         # ==========================================
-        # SEND MAPS
+        # SEND MAPS & SAVE
         # ==========================================
-
-        segString = ",".join(
-            str(x) for x in segMap
-        )
-
-        gridString = ",".join(
-            str(x) for x in gridMap
-        )
-
-        # ==========================================
-        # SEND MAPS
-        # ==========================================
+        segString = ",".join(str(x) for x in segMap)
+        gridString = ",".join(str(x) for x in gridMap)
 
         send_line(f"SEGMAP={segString}")
-
         send_line(f"GRIDMAP={gridString}")
+        send_line("SAVE")
 
-        ser.write("SAVE\n".encode())
-
-        statusLabel.configure(
-            text="Configuration saved"
-        )
-
+        statusLabel.configure(text="Configuration saved")
         set_status_state("save")
 
     except Exception as e:
-
-        statusLabel.configure(
-            text=f"Send failed"
-        )
-
+        print("SAVE ERROR:", e)
+        statusLabel.configure(text=f"Send failed: {e}")
         set_status_state("error")
 
 def refresh_ports():
@@ -517,6 +471,17 @@ def reset_ui():
     previewIndex = 0
     lastPreviewScroll = 0
 
+    # Clear advanced animation steps
+
+    for step in advancedSteps[:]:
+
+        try:
+            step.destroy()
+        except:
+            pass
+
+    advancedSteps.clear()
+
     # Clear text
 
     textEntry.configure(state="normal")
@@ -534,8 +499,6 @@ def reset_ui():
     # Reset options
 
     forceScrollVar.set(False)
-
-    animationVar.set("0 - Scroll")
 
     # Clear preview
 
@@ -636,6 +599,9 @@ def reset_force_scroll():
 # =====================================================
 
 def on_display_mode_changed(value):
+
+    global last_active_display_mode
+    last_active_display_mode = value
 
     simpleSettingsFrame.pack_forget()
     advancedSettingsFrame.pack_forget()
@@ -1247,91 +1213,228 @@ def draw_segment(x1, y1, x2, y2, on):
     )
 
 def draw_digit(x, y, char):
+    """
+    Draws an upscaled, bold 7-segment character layout with real VFD thickness and glow contrast.
+    """
+    COLOR_ON = "#00FFDD"    # Brilliant illuminated phosphor
+    COLOR_OFF = "#122623"   # Dim unlit filament shadow
 
     char = char.upper()
+    
+    # Extract the base character by stripping only the dot
+    base_char = char.replace('.', '')
+    if base_char == "":  
+        base_char = " "
+        
+    active_set = SEGMENTS.get(base_char, "")
 
-    segs = SEGMENTS.get(char, "")
+    # Upscaled Structural Geometry 
+    w = 44   # Width of digit
+    h = 84   # Height of digit
+    t = 6    # Thickness of segments
 
-    w = 48
-    h = 90
-    t = 8
+    # --- TOP HALF ---
+    # Segment A (Top Horizontal)
+    color_a = COLOR_ON if 'A' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x + t, y, x + w - t, y + t, fill=color_a, outline="")
 
-    draw_segment(x+t, y, x+w-t, y+t, "A" in segs)
-    draw_segment(x+w-t, y+t, x+w, y+h//2-t, "B" in segs)
-    draw_segment(x+w-t, y+h//2+t, x+w, y+h-t, "C" in segs)
-    draw_segment(x+t, y+h-t, x+w-t, y+h, "D" in segs)
-    draw_segment(x, y+h//2+t, x+t, y+h-t, "E" in segs)
-    draw_segment(x, y+t, x+t, y+h//2-t, "F" in segs)
-    draw_segment(x+t, y+h//2-4, x+w-t, y+h//2+4, "G" in segs)
+    # Segment F (Top-Left Vertical)
+    color_f = COLOR_ON if 'F' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x, y + t, x + t, y + (h // 2) - 2, fill=color_f, outline="")
+
+    # Segment B (Top-Right Vertical)
+    color_b = COLOR_ON if 'B' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x + w - t, y + t, x + w, y + (h // 2) - 2, fill=color_b, outline="")
+
+    # --- MIDDLE ---
+    # Segment G (Middle Horizontal)
+    color_g = COLOR_ON if 'G' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x + t, y + (h // 2) - (t // 2), x + w - t, y + (h // 2) + (t // 2), fill=color_g, outline="")
+
+    # --- BOTTOM HALF ---
+    # Segment E (Bottom-Left Vertical)
+    color_e = COLOR_ON if 'E' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x, y + (h // 2) + 2, x + t, y + h - t, fill=color_e, outline="")
+
+    # Segment C (Bottom-Right Vertical)
+    color_c = COLOR_ON if 'C' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x + w - t, y + (h // 2) + 2, x + w, y + h - t, fill=color_c, outline="")
+
+    # Segment D (Bottom Horizontal)
+    color_d = COLOR_ON if 'D' in active_set else COLOR_OFF
+    previewCanvas.create_rectangle(x + t, y + h - t, x + w - t, y + h, fill=color_d, outline="")
+
+    # --- PUNCTUATION ---
+    # Only check if a dot is in the character token string
+    color_dp = COLOR_ON if '.' in char else COLOR_OFF
+    previewCanvas.create_rectangle(x + w + 4, y + h - t, x + w + 4 + t, y + h, fill=color_dp, outline="")
 
 def update_preview():
-
-    global previewIndex
-    global lastPreviewScroll
-
-    if ser is None:
-
-        previewCanvas.delete("all")
-
-        app.after(30, update_preview)
-
-        return
+    global previewIndex, lastPreviewScroll
+    global py_current_step, py_step_start_time, py_last_frame_time, py_frame_index, py_blink_state
 
     previewCanvas.delete("all")
+    mode = displayModeVar.get()
 
-    text = textEntry.get().upper()
+    # Get current timestamp in milliseconds
+    now = int(time.time() * 1000)
 
-    if text == "":
-        text = " "
+    # ==========================================================
+    # SIMPLE DISPLAY MODE BRANCH
+    # ==========================================================
+    if mode == "simple":
+        text = textEntry.get().upper()
+        if text == "":
+            text = " "
+        spacing = int(spacingSlider.get())
+        force = forceScrollVar.get()
+        speed = int(speedSlider.get())
 
-    spacing = int(spacingSlider.get())
+        if len(text) <= 8 and not force:
+            visible = text.ljust(8)
+        else:
+            padded = text + (" " * spacing)
+            if now - lastPreviewScroll >= speed:
+                lastPreviewScroll = now
+                previewIndex += 1
+                if previewIndex >= len(padded):
+                    previewIndex = 0
+            circular = padded + padded
+            visible = circular[previewIndex:previewIndex + 8]
 
-    force = forceScrollVar.get()
-
-    speed = int(speedSlider.get())
-
-    # ==========================================
-    # FIXED TEXT
-    # ==========================================
-
-    if len(text) <= 8 and not force:
-
-        visible = text.ljust(8)
-
-    # ==========================================
-    # SCROLLING TEXT
-    # ==========================================
-
+    # ==========================================================
+    # ADVANCED DISPLAY MODE BRANCH
+    # ==========================================================
     else:
+        if len(advancedSteps) == 0:
+            visible = "NO STEPS"
+        else:
+            # Boundary control safety check
+            if py_current_step >= len(advancedSteps):
+                py_current_step = 0
 
-        padded = text + (" " * spacing)
+            step = advancedSteps[py_current_step]
+            
+            # Read variables safely directly from visual GUI rows
+            anim_type = step.animVar.get().upper()
+            anim_text = step.textEntry.get().upper()
+            
+            try:
+                duration = int(step.durationEntry.get().strip())
+            except:
+                duration = 2000
+                
+            try:
+                speed = int(step.speedEntry.get().strip())
+            except:
+                speed = 150
 
-        now = int(time.time() * 1000)
+            # --------------------------------------------------
+            # STATE UPDATE ENGINE (Mirrors Arduino behavior)
+            # --------------------------------------------------
+            if anim_type == "SCROLL":
+                if now - py_last_frame_time >= speed:
+                    py_last_frame_time = now
+                    py_frame_index += 1
 
-        if now - lastPreviewScroll >= speed:
+            elif anim_type == "TYPEWRITER":
+                if now - py_last_frame_time >= speed:
+                    py_last_frame_time = now
+                    if py_frame_index < len(anim_text):
+                        py_frame_index += 1
 
-            lastPreviewScroll = now
+            elif anim_type == "BLINK":
+                if now - py_last_frame_time >= speed:
+                    py_last_frame_time = now
+                    py_blink_state = not py_blink_state
 
-            previewIndex += 1
+            # Handle Step Sequence Timeline Progress
+            if duration > 0:
+                if now - py_step_start_time >= duration:
+                    py_current_step += 1
+                    if py_current_step >= len(advancedSteps):
+                        py_current_step = 0
+                    
+                    # Reset state registers for the next step frame
+                    py_step_start_time = now
+                    py_last_frame_time = now
+                    py_frame_index = 0
+                    py_blink_state = False
+                    
+                    # Re-evaluate instantly on next tick loop iteration
+                    app.after(30, update_preview)
+                    return
 
-            if previewIndex >= len(padded):
-                previewIndex = 0
+            # --------------------------------------------------
+            # FRAME STRING COMPILER (Mirrors Arduino logic)
+            # --------------------------------------------------
+            if anim_type == "STATIC":
+                visible = anim_text.ljust(8)[:8]
 
-        circular = padded + padded
+            elif anim_type == "SCROLL":
+                spacing = int(spacingSlider.get()) # Use global spacing slider for safety
+                padded_msg = anim_text + (" " * spacing)
+                if len(padded_msg) == 0:
+                    padded_msg = " "
+                
+                window = ""
+                for i in range(8):
+                    idx = (py_frame_index + i) % len(padded_msg)
+                    window += padded_msg[idx]
+                visible = window
 
-        visible = circular[
-            previewIndex:
-            previewIndex + 8
-        ]
+            elif anim_type == "BLINK":
+                if py_blink_state:
+                    visible = anim_text.ljust(8)[:8]
+                else:
+                    visible = "        "
 
-    x = 20
+            elif anim_type == "TYPEWRITER":
+                amt = py_frame_index
+                if amt > len(anim_text):
+                    amt = len(anim_text)
+                visible = anim_text[:amt].ljust(8)[:8]
+            else:
+                visible = "        "
 
-    for c in visible:
+    # ==========================================================
+    # RENDERING THE CHARACTER PIPELINE (DOT-ONLY PROTOCOL)
+    # ==========================================================
+    x = 15  # Balanced starting margin
+    
+    display_tokens = []
+    char_index = 0
+    
+    # Parse through the 'visible' string safely
+    while char_index < len(visible) and len(display_tokens) < 8:
+        current_char = visible[char_index]
+        
+        # Scenario A: The current character itself IS a standalone dot
+        if current_char == '.':
+            display_tokens.append(current_char)
+            char_index += 1
+            
+        # Scenario B: Current character is a letter/number, look ahead for a trailing dot
+        elif char_index + 1 < len(visible) and visible[char_index + 1] == '.':
+            # Securely combine them into a single dual-character token (e.g., "8.")
+            display_tokens.append(current_char + visible[char_index + 1])
+            char_index += 2  # Skip past the dot since it was successfully consumed
+            
+        # Scenario C: Just a normal character on its own
+        else:
+            display_tokens.append(current_char)
+            char_index += 1
 
-        draw_digit(x, 30, c)
+    # Pad out any remaining empty slots up to 8 total digits with blank spaces
+    while len(display_tokens) < 8:
+        display_tokens.append(" ")
 
-        x += 60
+    # Physically paint the 8 compiled tokens onto the canvas
+    for token in display_tokens:
+        draw_digit(x, 20, token)
+        x += 65
 
+    # Constant 30ms refresh rate tick rate tracking
     app.after(30, update_preview)
 
 # =====================================================
@@ -1498,7 +1601,7 @@ greenStatusLight.pack(
 tabview = ctk.CTkTabview(
     app,
     width=1350,
-    height=760
+    height=720
 )
 
 tabview.pack(padx=10, pady=10, fill="both", expand=True)
@@ -1854,70 +1957,80 @@ advancedTitle = ctk.CTkLabel(
 advancedTitle.pack(pady=(6, 8))
 
 # =====================================================
-# STEP LIST
+# ADVANCED TABLE WRAPPER
 # =====================================================
 
-stepListFrame = ctk.CTkScrollableFrame(
-    advancedSettingsFrame,
-    width=560,
-    height=120,
-    fg_color="#111111"
-)
-
-# =====================================================
-# COLUMN HEADERS
-# =====================================================
-
-headerRow = ctk.CTkFrame(
+advancedTableFrame = ctk.CTkFrame(
     advancedSettingsFrame,
     fg_color="transparent"
 )
 
+advancedTableFrame.pack(
+    fill="x",
+    padx=10,
+    pady=(0, 10)
+)
+
+# =====================================================
+# HEADER ROW
+# =====================================================
+
+headerRow = ctk.CTkFrame(
+    advancedTableFrame,
+    fg_color="transparent"
+)
+
 headerRow.pack(
-    padx=14,
-    pady=(0, 4),
-    anchor="w"
+    fill="x",
+    padx=(10, 0),
+    pady=(0, 4)
 )
 
 ctk.CTkLabel(
     headerRow,
     text="Animation",
-    font=("Arial", 13, "bold")
-).grid(row=0, column=0, padx=(0, 12), sticky="w")
+    font=("Arial", 13, "bold"),
+    width=100,
+    anchor="w"
+).grid(row=0, column=0, padx=(8, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
     text="Text",
-    font=("Arial", 13, "bold")
+    font=("Arial", 13, "bold"),
+    width=160,
+    anchor="w"
 ).grid(row=0, column=1, padx=(0, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
     text="Duration",
-    font=("Arial", 13, "bold")
+    font=("Arial", 13, "bold"),
+    width=70,
+    anchor="w"
 ).grid(row=0, column=2, padx=(0, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
     text="Speed",
-    font=("Arial", 13, "bold")
+    font=("Arial", 13, "bold"),
+    width=70,
+    anchor="w"
 ).grid(row=0, column=3, padx=(0, 12), sticky="w")
 
-# MATCH COLUMN WIDTHS TO ROW WIDGETS
-
-headerRow.grid_columnconfigure(0, minsize=112)
-headerRow.grid_columnconfigure(1, minsize=172)
-headerRow.grid_columnconfigure(2, minsize=82)
-headerRow.grid_columnconfigure(3, minsize=82)
-
 # =====================================================
-# SHOW STEP LIST
+# SCROLLABLE STEP LIST
 # =====================================================
+
+stepListFrame = ctk.CTkScrollableFrame(
+    advancedTableFrame,
+    width=560,
+    height=100,
+    fg_color="#111111"
+)
 
 stepListFrame.pack(
-    fill="x",
-    padx=10,
-    pady=(0, 10)
+    fill="x"
 )
 
 # =====================================================
@@ -1958,7 +2071,7 @@ def add_advanced_step(
     row.pack(
         fill="x",
         pady=2,
-        padx=4
+        padx=0
     )
 
     # ------------------------------------------
@@ -1977,7 +2090,8 @@ def add_advanced_step(
         ],
         variable=animVar,
         width=100,
-        height=30
+        height=30,
+        dynamic_resizing=False
     )
 
 
@@ -1985,7 +2099,7 @@ def add_advanced_step(
         row=0,
         column=0,
         padx=(8, 12),
-        pady=8,
+        pady=4,
         sticky="w"
     )
 
@@ -2073,6 +2187,11 @@ def add_advanced_step(
 
     advancedSteps.append(row)
 
+    global py_current_step, py_step_start_time, py_frame_index
+    py_current_step = 0
+    py_step_start_time = int(time.time() * 1000)
+    py_frame_index = 0
+
 # =====================================================
 # ADD BUTTON
 # =====================================================
@@ -2104,7 +2223,7 @@ previewFrame = ctk.CTkFrame(
 previewFrame.pack(
     fill="x",
     padx=25,
-    pady=(10, 20)
+    pady=(5, 10)
 )
 
 ctk.CTkLabel(
@@ -2123,13 +2242,13 @@ separator4.pack(fill="x", padx=20, pady=(0, 15))
 
 previewCanvas = tk.Canvas(
     previewFrame,
-    width=510,
+    width=545,
     height=150,
     bg="black",
     highlightthickness=0
 )
 
-previewCanvas.pack(pady=15)
+previewCanvas.pack(pady=5)
 
 # =====================================================
 # SAVE BUTTON
