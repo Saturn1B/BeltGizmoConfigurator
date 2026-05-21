@@ -4,13 +4,54 @@ from serial.tools import list_ports
 from tkinter import StringVar
 import tkinter as tk
 import time
+import os
+from PIL import Image
 
 # =====================================================
 # APPEARANCE
 # =====================================================
 
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("green")
+ctk.set_default_color_theme("dark-blue")
+
+# =====================================================
+# SPENGLER SYSTEMS — INDUSTRIAL TERMINAL THEME
+# =====================================================
+
+# Structure / Backgrounds
+S_BG          = "#0c0d0e"   # Industrial steel black
+S_PANEL       = "#111416"   # Raised panel surface
+S_PANEL2      = "#171b1e"   # Inner panel inset
+S_BORDER      = "#2a2e32"   # Subtle panel border
+S_BORDER2     = "#1e2225"   # Inner border / separator
+
+# Primary Accent — Proton Beam Red (save, critical actions)
+S_RED         = "#d62828"
+S_RED_HOVER   = "#a81e1e"
+S_RED_DIM     = "#2a0a0a"
+S_RED_MID     = "#6b1414"
+
+# Secondary Accent — Ecto-Plasm Yellow (toggles, selection, highlights)
+S_YELLOW      = "#f7b731"
+S_YELLOW_DIM  = "#3d2d0c"
+S_YELLOW_MID  = "#7d5c18"
+
+# VFD Display — phosphor glow
+S_VFD_BG      = "#050e0d"
+S_VFD_ON      = "#00ffdd"
+S_VFD_DIM     = "#0a2e2a"
+
+# Typography
+S_TEXT        = "#b8bfc7"   # Primary readable text
+S_TEXT_DIM    = "#4a5260"   # Muted label text
+S_TEXT_BRIGHT = "#dce3ea"   # Bright headings
+
+# Status lights
+S_GREEN_ON    = "#39d353"
+S_RED_ON      = "#d62828"
+S_LIGHT_OFF   = "#1a1d20"
+
+FONT_MONO     = "Courier New"
 
 # =====================================================
 # GLOBALS
@@ -105,7 +146,7 @@ def connect_serial():
     if selected == "No COM ports":
 
         statusLabel.configure(
-            text="No Arduino detected"
+            text="> NO ARDUINO DETECTED"
         )
 
         set_status_state("disconnected")
@@ -135,7 +176,7 @@ def connect_serial():
     except Exception:
 
         statusLabel.configure(
-            text="Connection failed"
+            text="> CONNECTION FAILED"
         )
 
         try:
@@ -159,7 +200,7 @@ def finish_connection(selected):
             raise Exception("Port failed")
 
         statusLabel.configure(
-            text=f"Connected to {selected}"
+            text=f"> CONNECTED: {selected}"
         )
 
         set_controls_enabled(True)
@@ -171,7 +212,7 @@ def finish_connection(selected):
     except Exception:
 
         statusLabel.configure(
-            text="Connection failed"
+            text="> CONNECTION FAILED"
         )
 
         try:
@@ -316,7 +357,7 @@ def load_config_from_arduino():
             displayModeVar.set(mode)
             on_display_mode_changed(mode)
 
-        statusLabel.configure(text="Configuration loaded")
+        statusLabel.configure(text="> CONFIG LOADED")
         set_status_state("idle")
 
     except Exception as e:
@@ -441,7 +482,7 @@ def save_to_arduino():
         send_line(f"GRIDMAP={gridString}")
         send_line("SAVE")
 
-        statusLabel.configure(text="Configuration saved")
+        statusLabel.configure(text="> CONFIG SAVED")
         set_status_state("save")
 
     except Exception as e:
@@ -458,7 +499,7 @@ def refresh_ports():
     portMenu.set(ports[0])
 
     statusLabel.configure(
-        text="COM ports refreshed"
+        text="> PORTS REFRESHED"
     )
 
 def reset_ui():
@@ -535,7 +576,7 @@ def monitor_connection():
         except Exception:
 
             statusLabel.configure(
-                text="Arduino disconnected"
+                text="> ARDUINO DISCONNECTED"
             )
 
             try:
@@ -629,13 +670,13 @@ def on_display_mode_changed(value):
 def update_speed(value):
 
     speedLabel.configure(
-        text=f"Scroll Speed: {int(value)} ms"
+        text=f"SCROLL SPEED: {int(value)} ms"
     )
 
 def update_spacing(value):
 
     spacingLabel.configure(
-        text=f"Scroll Spacing: {int(value)}"
+        text=f"SCROLL SPACING: {int(value)}"
     )
 
 def safe_pack(widget, **kwargs):
@@ -701,18 +742,17 @@ def update_scroll_controls():
 # =====================================================
 
 def create_reset_button(parent, command):
-
     return ctk.CTkButton(
         parent,
-        text="↻",
-        width=16,
-        height=16,
-        corner_radius=4,
+        text="↺",
+        width=18,
+        height=18,
+        corner_radius=3,
         border_spacing=0,
-        font=("Segoe UI Symbol", 8),
-        fg_color="#303030",
-        hover_color="#505050",
-        text_color="white",
+        font=(FONT_MONO, 9, "bold"),
+        fg_color=S_BORDER,
+        hover_color=S_YELLOW_MID,
+        text_color=S_YELLOW,
         command=command
     )
 
@@ -748,8 +788,8 @@ def set_status_state(state):
     # ALL OFF
     # ----------------------------------------
 
-    redStatusLight.configure(fg_color="#222222")
-    greenStatusLight.configure(fg_color="#222222")
+    redStatusLight.configure(fg_color=S_LIGHT_OFF)
+    greenStatusLight.configure(fg_color=S_LIGHT_OFF)
 
     # ----------------------------------------
     # IDLE
@@ -768,7 +808,7 @@ def set_status_state(state):
     elif state == "problem":
 
         redStatusLight.configure(
-            fg_color="#ff3333"
+            fg_color=S_RED_ON
         )
 
     # ----------------------------------------
@@ -872,21 +912,21 @@ def rapid_pulse(color, step):
     if color == "green":
 
         greenStatusLight.configure(
-            fg_color="#44ff88" if on else "#222222"
+            fg_color=S_GREEN_ON if on else "#222222"
         )
 
         redStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     else:
 
         redStatusLight.configure(
-            fg_color="#ff3333" if on else "#222222"
+            fg_color=S_RED_ON if on else "#222222"
         )
 
         greenStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     statusBlinkJob = app.after(
@@ -899,11 +939,11 @@ def idle_green_blink():
     global statusBlinkJob
 
     greenStatusLight.configure(
-        fg_color="#44ff88"
+        fg_color=S_GREEN_ON
     )
 
     redStatusLight.configure(
-        fg_color="#222222"
+        fg_color=S_LIGHT_OFF
     )
 
     statusBlinkJob = app.after(
@@ -916,7 +956,7 @@ def idle_green_off():
     global statusBlinkJob
 
     greenStatusLight.configure(
-        fg_color="#222222"
+        fg_color=S_LIGHT_OFF
     )
 
     statusBlinkJob = app.after(
@@ -929,11 +969,11 @@ def idle_red_blink():
     global statusBlinkJob
 
     redStatusLight.configure(
-        fg_color="#ff3333"
+        fg_color=S_RED_ON
     )
 
     greenStatusLight.configure(
-        fg_color="#222222"
+        fg_color=S_LIGHT_OFF
     )
 
     statusBlinkJob = app.after(
@@ -946,7 +986,7 @@ def idle_red_off():
     global statusBlinkJob
 
     redStatusLight.configure(
-        fg_color="#222222"
+        fg_color=S_LIGHT_OFF
     )
 
     statusBlinkJob = app.after(
@@ -965,13 +1005,13 @@ def connecting_heartbeat(step):
     pattern = [
 
         # RED ON
-        ("#ff3333", "#222222"),
+        (S_RED_ON, "#222222"),
 
         # BOTH OFF
         ("#222222", "#222222"),
 
         # GREEN ON
-        ("#222222", "#44ff88"),
+        ("#222222", S_GREEN_ON),
 
         # BOTH OFF
         ("#222222", "#222222"),
@@ -1006,8 +1046,8 @@ def disconnect_pulse(step):
 
     on = step % 2 == 0
 
-    colorRed = "#ff3333" if on else "#222222"
-    colorGreen = "#44ff88" if on else "#222222"
+    colorRed = S_RED_ON if on else "#222222"
+    colorGreen = S_GREEN_ON if on else "#222222"
 
     redStatusLight.configure(
         fg_color=colorRed
@@ -1037,21 +1077,21 @@ def pulse_status_light(light, step):
     if light == "green":
 
         greenStatusLight.configure(
-            fg_color="#44ff88" if on else "#222222"
+            fg_color=S_GREEN_ON if on else "#222222"
         )
 
         redStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     else:
 
         redStatusLight.configure(
-            fg_color="#ff3333" if on else "#222222"
+            fg_color=S_RED_ON if on else "#222222"
         )
 
         greenStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     statusBlinkJob = app.after(
@@ -1066,11 +1106,11 @@ def alternate_status_lights(step):
     if step >= 10:
 
         greenStatusLight.configure(
-            fg_color="#44ff88"
+            fg_color=S_GREEN_ON
         )
 
         redStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
         return
@@ -1078,21 +1118,21 @@ def alternate_status_lights(step):
     if step % 2 == 0:
 
         greenStatusLight.configure(
-            fg_color="#44ff88"
+            fg_color=S_GREEN_ON
         )
 
         redStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     else:
 
         redStatusLight.configure(
-            fg_color="#ffaa33"
+            fg_color=S_YELLOW
         )
 
         greenStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     statusBlinkJob = app.after(
@@ -1107,19 +1147,19 @@ def disconnect_flash(step):
     if step >= 6:
 
         redStatusLight.configure(
-            fg_color="#ff3333"
+            fg_color=S_RED_ON
         )
 
         return
 
-    color = "#ff3333" if step % 2 == 0 else "#222222"
+    color = S_RED_ON if step % 2 == 0 else "#222222"
 
     redStatusLight.configure(
         fg_color=color
     )
 
     greenStatusLight.configure(
-        fg_color="#222222"
+        fg_color=S_LIGHT_OFF
     )
 
     statusBlinkJob = app.after(
@@ -1132,8 +1172,8 @@ def loading_spinner(step):
     global statusBlinkJob
 
     states = [
-        ("#44ff88", "#222222"),
-        ("#222222", "#44ff88"),
+        (S_GREEN_ON, "#222222"),
+        ("#222222", S_GREEN_ON),
     ]
 
     green, red = states[step % 2]
@@ -1167,14 +1207,14 @@ def blink_status_light(light, step):
 
     if light == "red":
 
-        color = "#ff3333" if step % 2 == 0 else "#222222"
+        color = S_RED_ON if step % 2 == 0 else "#222222"
 
         redStatusLight.configure(
             fg_color=color
         )
 
         greenStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     # ----------------------------------------
@@ -1183,14 +1223,14 @@ def blink_status_light(light, step):
 
     else:
 
-        color = "#44ff88" if step % 2 == 0 else "#222222"
+        color = S_GREEN_ON if step % 2 == 0 else "#222222"
 
         greenStatusLight.configure(
             fg_color=color
         )
 
         redStatusLight.configure(
-            fg_color="#222222"
+            fg_color=S_LIGHT_OFF
         )
 
     statusBlinkJob = app.after(
@@ -1204,7 +1244,7 @@ def blink_status_light(light, step):
 
 def draw_segment(x1, y1, x2, y2, on):
 
-    color = "#18f2b2" if on else "#073737"
+    color = S_VFD_ON if on else "#051a18"
 
     previewCanvas.create_rectangle(
         x1, y1, x2, y2,
@@ -1214,60 +1254,58 @@ def draw_segment(x1, y1, x2, y2, on):
 
 def draw_digit(x, y, char):
     """
-    Draws an upscaled, bold 7-segment character layout with real VFD thickness and glow contrast.
+    Draws a VFD 7-segment digit with layered glow effect.
     """
-    COLOR_ON = "#00FFDD"    # Brilliant illuminated phosphor
-    COLOR_OFF = "#122623"   # Dim unlit filament shadow
+    COLOR_ON   = "#00ffdd"   # Phosphor on
+    COLOR_GLOW = "#004a42"   # Soft glow halo (1px wider, behind)
+    COLOR_OFF  = "#041512"   # Dim unlit filament
 
     char = char.upper()
-    
-    # Extract the base character by stripping only the dot
-    base_char = char.replace('.', '')
-    if base_char == "":  
+    base_char = char.replace(".", "")
+    if base_char == "":
         base_char = " "
-        
     active_set = SEGMENTS.get(base_char, "")
 
-    # Upscaled Structural Geometry 
-    w = 44   # Width of digit
-    h = 84   # Height of digit
-    t = 6    # Thickness of segments
+    w = 40   # digit width
+    h = 80   # digit height
+    t = 5    # segment thickness
+    g = 2    # glow expansion
 
-    # --- TOP HALF ---
-    # Segment A (Top Horizontal)
-    color_a = COLOR_ON if 'A' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x + t, y, x + w - t, y + t, fill=color_a, outline="")
+    def seg(x1, y1, x2, y2, on):
+        if on:
+            # Glow layer (slightly expanded, darker teal)
+            previewCanvas.create_rectangle(
+                x1 - g, y1 - g, x2 + g, y2 + g,
+                fill=COLOR_GLOW, outline="")
+            # Main bright segment
+            previewCanvas.create_rectangle(
+                x1, y1, x2, y2,
+                fill=COLOR_ON, outline="")
+        else:
+            previewCanvas.create_rectangle(
+                x1, y1, x2, y2,
+                fill=COLOR_OFF, outline="")
 
-    # Segment F (Top-Left Vertical)
-    color_f = COLOR_ON if 'F' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x, y + t, x + t, y + (h // 2) - 2, fill=color_f, outline="")
-
-    # Segment B (Top-Right Vertical)
-    color_b = COLOR_ON if 'B' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x + w - t, y + t, x + w, y + (h // 2) - 2, fill=color_b, outline="")
-
-    # --- MIDDLE ---
-    # Segment G (Middle Horizontal)
-    color_g = COLOR_ON if 'G' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x + t, y + (h // 2) - (t // 2), x + w - t, y + (h // 2) + (t // 2), fill=color_g, outline="")
-
-    # --- BOTTOM HALF ---
-    # Segment E (Bottom-Left Vertical)
-    color_e = COLOR_ON if 'E' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x, y + (h // 2) + 2, x + t, y + h - t, fill=color_e, outline="")
-
-    # Segment C (Bottom-Right Vertical)
-    color_c = COLOR_ON if 'C' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x + w - t, y + (h // 2) + 2, x + w, y + h - t, fill=color_c, outline="")
-
-    # Segment D (Bottom Horizontal)
-    color_d = COLOR_ON if 'D' in active_set else COLOR_OFF
-    previewCanvas.create_rectangle(x + t, y + h - t, x + w - t, y + h, fill=color_d, outline="")
-
-    # --- PUNCTUATION ---
-    # Only check if a dot is in the character token string
-    color_dp = COLOR_ON if '.' in char else COLOR_OFF
-    previewCanvas.create_rectangle(x + w + 4, y + h - t, x + w + 4 + t, y + h, fill=color_dp, outline="")
+    seg(x+t,     y,              x+w-t,   y+t,              "A" in active_set)  # Top
+    seg(x+w-t,   y+t,            x+w,     y+(h//2)-2,       "B" in active_set)  # Top-right
+    seg(x+w-t,   y+(h//2)+2,     x+w,     y+h-t,            "C" in active_set)  # Bot-right
+    seg(x+t,     y+h-t,          x+w-t,   y+h,              "D" in active_set)  # Bottom
+    seg(x,       y+(h//2)+2,     x+t,     y+h-t,            "E" in active_set)  # Bot-left
+    seg(x,       y+t,            x+t,     y+(h//2)-2,       "F" in active_set)  # Top-left
+    seg(x+t,     y+(h//2)-(t//2),x+w-t,   y+(h//2)+(t//2), "G" in active_set)  # Middle
+    # Decimal point
+    dp_on = "." in char
+    if dp_on:
+        previewCanvas.create_rectangle(
+            x+w+4-g, y+h-t-g, x+w+4+t+g, y+h+g,
+            fill=COLOR_GLOW, outline="")
+        previewCanvas.create_rectangle(
+            x+w+4, y+h-t, x+w+4+t, y+h,
+            fill=COLOR_ON, outline="")
+    else:
+        previewCanvas.create_rectangle(
+            x+w+4, y+h-t, x+w+4+t, y+h,
+            fill=COLOR_OFF, outline="")
 
 def update_preview():
     global previewIndex, lastPreviewScroll
@@ -1400,41 +1438,77 @@ def update_preview():
     # ==========================================================
     # RENDERING THE CHARACTER PIPELINE (DOT-ONLY PROTOCOL)
     # ==========================================================
-    x = 15  # Balanced starting margin
-    
+
+    # Canvas dimensions
+    CANVAS_W = 580
+    CANVAS_H = 160
+    DIGIT_W  = 40
+    DIGIT_H  = 80
+    DIGIT_PITCH = 66        # horizontal distance between digit origins
+    MARGIN_X = 18
+    MARGIN_Y = 28           # top margin (space for bezel top)
+
+    # ── Draw outer bezel border ─────────────────────────────────────────────
+    BEZEL_PAD = 10
+    previewCanvas.create_rectangle(
+        BEZEL_PAD, BEZEL_PAD, CANVAS_W - BEZEL_PAD, CANVAS_H - BEZEL_PAD,
+        outline="#1e3330", width=2, fill="")
+
+    # ── Scanlines (subtle horizontal lines every 4px) ───────────────────────
+    for sy in range(0, CANVAS_H, 4):
+        previewCanvas.create_line(
+            BEZEL_PAD+2, sy, CANVAS_W-BEZEL_PAD-2, sy,
+            fill="#000000", width=1, stipple="gray25")
+
+    # ── Tube slot separators (thin vertical lines between digits) ───────────
+    for di in range(1, 8):
+        sx = MARGIN_X + di * DIGIT_PITCH - 8
+        previewCanvas.create_line(
+            sx, BEZEL_PAD+6, sx, CANVAS_H-BEZEL_PAD-6,
+            fill="#0d2a26", width=1)
+
+    # ── Tube index labels ────────────────────────────────────────────────────
+    for di in range(8):
+        lx = MARGIN_X + di * DIGIT_PITCH + DIGIT_W // 2
+        previewCanvas.create_text(
+            lx, CANVAS_H - BEZEL_PAD - 8,
+            text=f"T{di+1}", fill="#163d38",
+            font=("Courier New", 7))
+
+    # ── Corner notches ───────────────────────────────────────────────────────
+    notch = 6
+    for cx, cy, dx, dy in [
+        (BEZEL_PAD, BEZEL_PAD, notch, notch),
+        (CANVAS_W-BEZEL_PAD, BEZEL_PAD, -notch, notch),
+        (BEZEL_PAD, CANVAS_H-BEZEL_PAD, notch, -notch),
+        (CANVAS_W-BEZEL_PAD, CANVAS_H-BEZEL_PAD, -notch, -notch),
+    ]:
+        previewCanvas.create_line(cx, cy, cx+dx, cy, fill="#2a4f4a", width=1)
+        previewCanvas.create_line(cx, cy, cx, cy+dy, fill="#2a4f4a", width=1)
+
+    # ── Parse & paint tokens ─────────────────────────────────────────────────
     display_tokens = []
     char_index = 0
-    
-    # Parse through the 'visible' string safely
     while char_index < len(visible) and len(display_tokens) < 8:
         current_char = visible[char_index]
-        
-        # Scenario A: The current character itself IS a standalone dot
-        if current_char == '.':
+        if current_char == ".":
             display_tokens.append(current_char)
             char_index += 1
-            
-        # Scenario B: Current character is a letter/number, look ahead for a trailing dot
-        elif char_index + 1 < len(visible) and visible[char_index + 1] == '.':
-            # Securely combine them into a single dual-character token (e.g., "8.")
+        elif char_index + 1 < len(visible) and visible[char_index + 1] == ".":
             display_tokens.append(current_char + visible[char_index + 1])
-            char_index += 2  # Skip past the dot since it was successfully consumed
-            
-        # Scenario C: Just a normal character on its own
+            char_index += 2
         else:
             display_tokens.append(current_char)
             char_index += 1
-
-    # Pad out any remaining empty slots up to 8 total digits with blank spaces
     while len(display_tokens) < 8:
         display_tokens.append(" ")
 
-    # Physically paint the 8 compiled tokens onto the canvas
+    x = MARGIN_X
     for token in display_tokens:
-        draw_digit(x, 20, token)
-        x += 65
+        draw_digit(x, MARGIN_Y, token)
+        x += DIGIT_PITCH
 
-    # Constant 30ms refresh rate tick rate tracking
+    # Constant 30ms refresh rate
     app.after(30, update_preview)
 
 # =====================================================
@@ -1442,13 +1516,9 @@ def update_preview():
 # =====================================================
 
 app = ctk.CTk()
-
-app.title("Belt Gizmo VFD Configurator")
-
-app.after(
-    100,
-    lambda: app.state("zoomed")
-)
+app.title("Spengler Systems — Gizmo VFD Configurator")
+app.configure(fg_color=S_BG)
+app.after(100, lambda: app.state("zoomed"))
 
 forceScrollVar = ctk.BooleanVar(value=False)
 
@@ -1520,79 +1590,65 @@ mappingOptions = [
 ]
 
 # =====================================================
-# MAIN TITLE
+# HEADER BAR — SPENGLER SYSTEMS BRANDING
 # =====================================================
 
-titleLabel = ctk.CTkLabel(
-    app,
-    text="Gizmo VFD Configurator",
-    font=("Arial", 34, "bold")
-)
+# Red accent stripe — very top
+accentStripe = ctk.CTkFrame(app, fg_color=S_RED, height=3, corner_radius=0)
+accentStripe.pack(fill="x", side="top")
+accentStripe.pack_propagate(False)
 
-titleLabel.pack(pady=(15, 5))
+# Main header bar
+headerBar = ctk.CTkFrame(app, fg_color=S_PANEL, corner_radius=0, border_width=0)
+headerBar.pack(fill="x", side="top")
 
-subtitleLabel = ctk.CTkLabel(
-    app,
-    text="VFD Display Configuration Utility",
-    font=("Arial", 14),
-    text_color="#888888"
-)
+# Single content row — tight padding
+headerInner = ctk.CTkFrame(headerBar, fg_color="transparent")
+headerInner.pack(fill="x", padx=16, pady=(6, 6))
 
-subtitleLabel.pack(pady=(0, 10))
+# Logo — small
+try:
+    _logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gb-logo.png")
+    _pil_logo = Image.open(_logo_path).convert("RGBA")
+    _ctk_logo = ctk.CTkImage(_pil_logo, size=(38, 38))
+    ctk.CTkLabel(headerInner, image=_ctk_logo, text="").pack(side="left", padx=(0, 12))
+except Exception as _e:
+    print("Logo:", _e)
 
-# =====================================================
-# GLOBAL STATUS LIGHTS
-# =====================================================
+# Title + subtitle stacked
+titleStack = ctk.CTkFrame(headerInner, fg_color="transparent")
+titleStack.pack(side="left")
 
+titleLabel = ctk.CTkLabel(titleStack, text="SPENGLER SYSTEMS",
+    font=(FONT_MONO, 22, "bold"), text_color=S_RED, anchor="w")
+titleLabel.pack(anchor="w")
+
+subtitleLabel = ctk.CTkLabel(titleStack,
+    text="GIZMO VFD DISPLAY CONFIGURATION TERMINAL",
+    font=(FONT_MONO, 9), text_color=S_TEXT_DIM, anchor="w")
+subtitleLabel.pack(anchor="w")
+
+# ── STATUS LIGHTS — right side of header ─────────────────────────────────────
 globalStatusFrame = ctk.CTkFrame(
-    app,
-    fg_color="#111111",
-    corner_radius=14
-)
+    headerInner, fg_color=S_PANEL2,
+    corner_radius=6, border_width=1, border_color=S_BORDER)
+globalStatusFrame.pack(side="right")
 
-globalStatusFrame.place(
-    relx=0.985,
-    y=18,
-    anchor="ne"
-)
+ctk.CTkLabel(globalStatusFrame, text="SYS STATUS",
+    font=(FONT_MONO, 7), text_color=S_TEXT_DIM).pack(pady=(4, 2), padx=10)
 
-# -----------------------------------
-# RED STATUS LIGHT
-# -----------------------------------
+lightsRow = ctk.CTkFrame(globalStatusFrame, fg_color="transparent")
+lightsRow.pack(pady=(0, 6), padx=10)
 
 redStatusLight = ctk.CTkLabel(
-    globalStatusFrame,
-    text="",
-    width=24,
-    height=24,
-    corner_radius=12,
-    fg_color="#222222"
-)
-
-redStatusLight.pack(
-    side="left",
-    padx=(10, 6),
-    pady=10
-)
-
-# -----------------------------------
-# GREEN STATUS LIGHT
-# -----------------------------------
+    lightsRow, text="", width=14, height=14,
+    corner_radius=7, fg_color=S_LIGHT_OFF)
+redStatusLight.pack(side="left", padx=(0, 6))
 
 greenStatusLight = ctk.CTkLabel(
-    globalStatusFrame,
-    text="",
-    width=24,
-    height=24,
-    corner_radius=12,
-    fg_color="#222222"
-)
-
-greenStatusLight.pack(
-    side="left",
-    padx=(6, 10),
-    pady=10
-)
+    lightsRow, text="", width=14, height=14,
+    corner_radius=7, fg_color=S_LIGHT_OFF)
+greenStatusLight.pack(side="left")
 
 # =====================================================
 # TABVIEW
@@ -1601,7 +1657,17 @@ greenStatusLight.pack(
 tabview = ctk.CTkTabview(
     app,
     width=1350,
-    height=720
+    height=720,
+    fg_color=S_PANEL,
+    segmented_button_fg_color=S_BG,
+    segmented_button_selected_color=S_RED,
+    segmented_button_selected_hover_color=S_RED_HOVER,
+    segmented_button_unselected_color=S_BG,
+    segmented_button_unselected_hover_color=S_PANEL2,
+    text_color=S_TEXT,
+    text_color_disabled=S_TEXT_DIM,
+    border_width=1,
+    border_color=S_BORDER
 )
 
 tabview.pack(padx=10, pady=10, fill="both", expand=True)
@@ -1649,10 +1715,10 @@ connectionFrame = ctk.CTkFrame(
     topFrame,
     width=260,
     height=250,
-    corner_radius=14,
-    fg_color="#1a1a1a",
-    border_width=2,
-    border_color="#2b2b2b"
+    corner_radius=6,
+    fg_color=S_PANEL2,
+    border_width=1,
+    border_color=S_BORDER
 )
 
 connectionFrame.pack(
@@ -1667,46 +1733,51 @@ connectionFrame.pack_propagate(False)
 
 ctk.CTkLabel(
     connectionFrame,
-    text="Connection",
-    font=("Arial", 20, "bold")
-).pack(pady=(18, 10))
+    text="CONNECTION",
+    font=(FONT_MONO, 12, "bold"),
+    text_color=S_YELLOW
+).pack(pady=(14, 6))
 
-separator1 = ctk.CTkFrame(
-    connectionFrame,
-    height=2,
-    fg_color="#444444"
-)
-
-separator1.pack(fill="x", padx=20, pady=(0, 15))
+separator1 = ctk.CTkFrame(connectionFrame, height=1, fg_color=S_BORDER)
+separator1.pack(fill="x", padx=16, pady=(0, 12))
 
 portMenu = ctk.CTkOptionMenu(
     connectionFrame,
     values=get_ports(),
-    width=180
+    width=180,
+    font=(FONT_MONO, 11),
+    fg_color=S_PANEL,
+    button_color=S_BORDER,
+    button_hover_color=S_YELLOW_MID,
+    text_color=S_TEXT,
+    dropdown_fg_color=S_PANEL2,
+    dropdown_text_color=S_TEXT,
+    dropdown_hover_color=S_YELLOW_DIM
 )
 
 portMenu.pack(pady=8)
 
 ctk.CTkButton(
-    connectionFrame,
-    text="Refresh COM Ports",
-    command=refresh_ports,
-    width=180,
-    height=34
-).pack(pady=8)
+    connectionFrame, text="REFRESH PORTS",
+    command=refresh_ports, width=180, height=32,
+    font=(FONT_MONO, 10), corner_radius=4,
+    fg_color=S_PANEL, hover_color=S_BORDER,
+    text_color=S_TEXT, border_width=1, border_color=S_BORDER
+).pack(pady=6)
 
 ctk.CTkButton(
-    connectionFrame,
-    text="Connect Arduino",
-    command=connect_serial,
-    width=180,
-    height=34
-).pack(pady=8)
+    connectionFrame, text="CONNECT ARDUINO",
+    command=connect_serial, width=180, height=34,
+    font=(FONT_MONO, 10, "bold"), corner_radius=4,
+    fg_color=S_RED, hover_color=S_RED_HOVER,
+    text_color=S_TEXT_BRIGHT, border_width=0
+).pack(pady=6)
 
 statusLabel = ctk.CTkLabel(
     connectionFrame,
-    text="Not connected",
-    font=("Arial", 13)
+    text="> NOT CONNECTED",
+    font=(FONT_MONO, 10),
+    text_color=S_TEXT_DIM
 )
 
 statusLabel.pack(pady=15)
@@ -1717,10 +1788,10 @@ statusLabel.pack(pady=15)
 
 displayFrame = ctk.CTkFrame(
     topFrame,
-    corner_radius=14,
-    fg_color="#161616",
-    border_width=2,
-    border_color="#2b2b2b"
+    corner_radius=6,
+    fg_color=S_PANEL2,
+    border_width=1,
+    border_color=S_BORDER
 )
 
 displayFrame.pack(
@@ -1734,9 +1805,10 @@ displayFrame.pack_configure(ipadx=10, ipady=10)
 
 ctk.CTkLabel(
     displayFrame,
-    text="Display Settings",
-    font=("Arial", 20, "bold")
-).pack(pady=(18, 10))
+    text="DISPLAY SETTINGS",
+    font=(FONT_MONO, 12, "bold"),
+    text_color=S_YELLOW
+).pack(pady=(14, 6))
 
 # =====================================================
 # DISPLAY MODE TOGGLE
@@ -1748,20 +1820,23 @@ modeToggle = ctk.CTkSegmentedButton(
     variable=displayModeVar,
     command=on_display_mode_changed,
     width=260,
-    height=34
+    height=32,
+    font=(FONT_MONO, 11, "bold"),
+    fg_color=S_PANEL,
+    selected_color=S_YELLOW_MID,
+    selected_hover_color=S_YELLOW_MID,
+    unselected_color=S_PANEL,
+    unselected_hover_color=S_PANEL2,
+    text_color=S_YELLOW,
+    text_color_disabled=S_TEXT_DIM
 )
 
 modeToggle.pack(pady=(0, 12))
 
 modeToggle.set("simple")
 
-separator2 = ctk.CTkFrame(
-    displayFrame,
-    height=2,
-    fg_color="#444444"
-)
-
-separator2.pack(fill="x", padx=20, pady=(0, 15))
+separator2 = ctk.CTkFrame(displayFrame, height=1, fg_color=S_BORDER)
+separator2.pack(fill="x", padx=16, pady=(0, 12))
 
 # =====================================================
 # SETTINGS MODE CONTAINERS
@@ -1789,8 +1864,9 @@ simpleSettingsFrame.pack(
 
 textLabel = ctk.CTkLabel(
     displayFrame,
-    text="Display Text",
-    font=("Arial", 15, "bold")
+    text="DISPLAY TEXT",
+    font=(FONT_MONO, 10, "bold"),
+    text_color=S_TEXT_DIM
 )
 
 textLabel.pack(in_=simpleSettingsFrame)
@@ -1803,9 +1879,11 @@ textRow = ctk.CTkFrame(
 textRow.pack(pady=(6, 18))
 
 textEntry = ctk.CTkEntry(
-    textRow,
-    width=500,
-    height=36
+    textRow, width=500, height=36,
+    font=(FONT_MONO, 14),
+    fg_color=S_VFD_BG, border_color=S_BORDER,
+    text_color=S_VFD_ON, placeholder_text="> ENTER TEXT",
+    placeholder_text_color=S_TEXT_DIM
 )
 
 textEntry.pack(side="left")
@@ -1847,11 +1925,10 @@ speedControlRow = ctk.CTkFrame(
 speedControlRow.pack(pady=(6, 18))
 
 speedSlider = ctk.CTkSlider(
-    speedControlRow,
-    from_=50,
-    to=1000,
-    width=350,
-    command=update_speed
+    speedControlRow, from_=50, to=1000, width=350,
+    command=update_speed,
+    button_color=S_YELLOW, button_hover_color=S_YELLOW,
+    progress_color=S_YELLOW_MID, fg_color=S_BORDER2
 )
 
 speedSlider.set(DEFAULT_SPEED)
@@ -1892,12 +1969,10 @@ spacingControlRow = ctk.CTkFrame(
 spacingControlRow.pack(pady=(6, 18))
 
 spacingSlider = ctk.CTkSlider(
-    spacingControlRow,
-    from_=1,
-    to=20,
-    number_of_steps=19,
-    width=350,
-    command=update_spacing
+    spacingControlRow, from_=1, to=20, number_of_steps=19, width=350,
+    command=update_spacing,
+    button_color=S_YELLOW, button_hover_color=S_YELLOW,
+    progress_color=S_YELLOW_MID, fg_color=S_BORDER2
 )
 
 spacingSlider.set(DEFAULT_SPACING)
@@ -1924,8 +1999,14 @@ forceScrollRow = ctk.CTkFrame(
 
 forceScrollCheck = ctk.CTkCheckBox(
     forceScrollRow,
-    text="Force Scroll",
-    variable=forceScrollVar
+    text="FORCE SCROLL",
+    variable=forceScrollVar,
+    font=(FONT_MONO, 11),
+    text_color=S_TEXT,
+    fg_color=S_YELLOW_MID,
+    hover_color=S_YELLOW_MID,
+    checkmark_color=S_BG,
+    border_color=S_BORDER
 )
 
 forceScrollCheck.pack(side="left")
@@ -1950,8 +2031,9 @@ forceScrollRow.pack(pady=(0, 18))
 
 advancedTitle = ctk.CTkLabel(
     advancedSettingsFrame,
-    text="Advanced Animation Sequence",
-    font=("Arial", 18, "bold")
+    text="ANIMATION SEQUENCE",
+    font=(FONT_MONO, 11, "bold"),
+    text_color=S_YELLOW
 )
 
 advancedTitle.pack(pady=(6, 8))
@@ -1988,32 +2070,36 @@ headerRow.pack(
 
 ctk.CTkLabel(
     headerRow,
-    text="Animation",
-    font=("Arial", 13, "bold"),
+    text="ANIMATION",
+    font=(FONT_MONO, 10, "bold"),
+    text_color=S_TEXT_DIM,
     width=100,
     anchor="w"
 ).grid(row=0, column=0, padx=(8, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
-    text="Text",
-    font=("Arial", 13, "bold"),
+    text="TEXT",
+    font=(FONT_MONO, 10, "bold"),
+    text_color=S_TEXT_DIM,
     width=160,
     anchor="w"
 ).grid(row=0, column=1, padx=(0, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
-    text="Duration",
-    font=("Arial", 13, "bold"),
+    text="DURATION",
+    font=(FONT_MONO, 10, "bold"),
+    text_color=S_TEXT_DIM,
     width=70,
     anchor="w"
 ).grid(row=0, column=2, padx=(0, 12), sticky="w")
 
 ctk.CTkLabel(
     headerRow,
-    text="Speed",
-    font=("Arial", 13, "bold"),
+    text="SPEED",
+    font=(FONT_MONO, 10, "bold"),
+    text_color=S_TEXT_DIM,
     width=70,
     anchor="w"
 ).grid(row=0, column=3, padx=(0, 12), sticky="w")
@@ -2023,10 +2109,8 @@ ctk.CTkLabel(
 # =====================================================
 
 stepListFrame = ctk.CTkScrollableFrame(
-    advancedTableFrame,
-    width=560,
-    height=100,
-    fg_color="#111111"
+    advancedTableFrame, width=560, height=100,
+    fg_color=S_PANEL2, border_width=1, border_color=S_BORDER
 )
 
 stepListFrame.pack(
@@ -2063,9 +2147,8 @@ def add_advanced_step(
 ):
 
     row = ctk.CTkFrame(
-        stepListFrame,
-        fg_color="#202020",
-        corner_radius=8
+        stepListFrame, fg_color=S_PANEL,
+        corner_radius=4, border_width=1, border_color=S_BORDER2
     )
 
     row.pack(
@@ -2081,17 +2164,12 @@ def add_advanced_step(
     animVar = ctk.StringVar(value=anim)
 
     animMenu = ctk.CTkOptionMenu(
-        row,
-        values=[
-            "STATIC",
-            "SCROLL",
-            "BLINK",
-            "TYPEWRITER"
-        ],
-        variable=animVar,
-        width=100,
-        height=30,
-        dynamic_resizing=False
+        row, values=["STATIC","SCROLL","BLINK","TYPEWRITER"],
+        variable=animVar, width=100, height=30, dynamic_resizing=False,
+        font=(FONT_MONO, 10), fg_color=S_PANEL2,
+        button_color=S_BORDER, button_hover_color=S_YELLOW_MID,
+        text_color=S_TEXT, dropdown_fg_color=S_PANEL2,
+        dropdown_text_color=S_TEXT, dropdown_hover_color=S_YELLOW_DIM
     )
 
 
@@ -2108,9 +2186,9 @@ def add_advanced_step(
     # ------------------------------------------
 
     textEntry = ctk.CTkEntry(
-        row,
-        width=160,
-        height=30
+        row, width=160, height=30,
+        font=(FONT_MONO, 10), fg_color=S_VFD_BG,
+        border_color=S_BORDER, text_color=S_VFD_ON
     )
 
     textEntry.insert(0, text)
@@ -2127,9 +2205,9 @@ def add_advanced_step(
     # ------------------------------------------
 
     durationEntry = ctk.CTkEntry(
-        row,
-        width=70,
-        height=30
+        row, width=70, height=30,
+        font=(FONT_MONO, 10), fg_color=S_PANEL2,
+        border_color=S_BORDER, text_color=S_TEXT
     )
 
     durationEntry.insert(0, duration)
@@ -2146,9 +2224,9 @@ def add_advanced_step(
     # ------------------------------------------
 
     speedEntry = ctk.CTkEntry(
-        row,
-        width=70,
-        height=30
+        row, width=70, height=30,
+        font=(FONT_MONO, 10), fg_color=S_PANEL2,
+        border_color=S_BORDER, text_color=S_TEXT
     )
 
     speedEntry.insert(0, speed)
@@ -2165,12 +2243,9 @@ def add_advanced_step(
     # ------------------------------------------
 
     removeButton = ctk.CTkButton(
-        row,
-        text="✕",
-        width=28,
-        height=28,
-        fg_color="#992222",
-        hover_color="#bb3333",
+        row, text="✕", width=28, height=28,
+        font=(FONT_MONO, 10), fg_color=S_RED_DIM,
+        hover_color=S_RED, text_color=S_TEXT_BRIGHT, corner_radius=4,
         command=lambda: remove_advanced_step(row)
     )
 
@@ -2197,10 +2272,11 @@ def add_advanced_step(
 # =====================================================
 
 addStepButton = ctk.CTkButton(
-    advancedSettingsFrame,
-    text="+ Add Step",
-    height=36,
-    command=add_advanced_step
+    advancedSettingsFrame, text="+ ADD STEP",
+    height=32, command=add_advanced_step,
+    font=(FONT_MONO, 10, "bold"), corner_radius=4,
+    fg_color=S_PANEL, hover_color=S_BORDER,
+    text_color=S_YELLOW, border_width=1, border_color=S_YELLOW_MID
 )
 
 addStepButton.pack(
@@ -2216,8 +2292,8 @@ addStepButton.pack(
 # =====================================================
 
 previewFrame = ctk.CTkFrame(
-    displayTab,
-    corner_radius=14
+    displayTab, corner_radius=6,
+    fg_color=S_PANEL2, border_width=1, border_color=S_BORDER
 )
 
 previewFrame.pack(
@@ -2227,25 +2303,16 @@ previewFrame.pack(
 )
 
 ctk.CTkLabel(
-    previewFrame,
-    text="VFD Preview",
-    font=("Arial", 20, "bold")
-).pack(pady=(15, 10))
+    previewFrame, text="VFD PREVIEW",
+    font=(FONT_MONO, 10, "bold"), text_color=S_TEXT_DIM
+).pack(pady=(10, 6))
 
-separator4 = ctk.CTkFrame(
-    previewFrame,
-    height=2,
-    fg_color="#444444"
-)
-
-separator4.pack(fill="x", padx=20, pady=(0, 15))
+separator4 = ctk.CTkFrame(previewFrame, height=1, fg_color=S_BORDER)
+separator4.pack(fill="x", padx=16, pady=(0, 10))
 
 previewCanvas = tk.Canvas(
-    previewFrame,
-    width=545,
-    height=150,
-    bg="black",
-    highlightthickness=0
+    previewFrame, width=580, height=160,
+    bg=S_VFD_BG, highlightthickness=0
 )
 
 previewCanvas.pack(pady=5)
@@ -2254,13 +2321,12 @@ previewCanvas.pack(pady=5)
 # SAVE BUTTON
 # =====================================================
 
-saveButtonDisplay  = ctk.CTkButton(
-    displayTab,
-    text="Save To Arduino",
-    command=save_to_arduino,
-    width=260,
-    height=44,
-    font=("Arial", 16, "bold")
+saveButtonDisplay = ctk.CTkButton(
+    displayTab, text="▶  SAVE TO ARDUINO",
+    command=save_to_arduino, width=280, height=42,
+    font=(FONT_MONO, 13, "bold"), corner_radius=4,
+    fg_color=S_RED, hover_color=S_RED_HOVER,
+    text_color=S_TEXT_BRIGHT
 )
 
 saveButtonDisplay.pack(pady=(0, 20))
@@ -2270,37 +2336,33 @@ saveButtonDisplay.pack(pady=(0, 20))
 # =====================================================
 
 hardwareTitle = ctk.CTkLabel(
-    hardwareScroll,
-    text="MAX6921 Hardware Mapping",
-    font=("Arial", 28, "bold")
+    hardwareScroll, text="MAX6921 — HARDWARE MAPPING",
+    font=(FONT_MONO, 16, "bold"), text_color=S_RED
 )
 
 hardwareTitle.pack(pady=(20, 5))
 
 hardwareInfo = ctk.CTkLabel(
     hardwareScroll,
-    text="Assign MAX6921 outputs to segments and grids",
-    font=("Arial", 15),
-    text_color="#888888"
+    text="ASSIGN MAX6921 OUTPUTS TO SEGMENTS AND GRIDS",
+    font=(FONT_MONO, 9), text_color=S_TEXT_DIM
 )
 
 hardwareInfo.pack(pady=(0, 15))
 
 mappingStatusLabel = ctk.CTkLabel(
-    hardwareScroll,
-    text="",
-    font=("Arial", 14)
+    hardwareScroll, text="",
+    font=(FONT_MONO, 10), text_color=S_TEXT_DIM
 )
 
 mappingStatusLabel.pack(pady=(0, 10))
 
 saveButtonHardware = ctk.CTkButton(
-    hardwareScroll,
-    text="Save To Arduino",
-    command=save_to_arduino,
-    width=260,
-    height=44,
-    font=("Arial", 16, "bold")
+    hardwareScroll, text="▶  SAVE TO ARDUINO",
+    command=save_to_arduino, width=280, height=42,
+    font=(FONT_MONO, 13, "bold"), corner_radius=4,
+    fg_color=S_RED, hover_color=S_RED_HOVER,
+    text_color=S_TEXT_BRIGHT
 )
 
 saveButtonHardware.pack(pady=(0, 15))
@@ -2310,11 +2372,8 @@ saveButtonHardware.pack(pady=(0, 15))
 # =====================================================
 
 chipCanvas = tk.Canvas(
-    hardwareScroll,
-    width=1650,
-    height=520,
-    bg="#181818",
-    highlightthickness=0
+    hardwareScroll, width=1650, height=520,
+    bg=S_BG, highlightthickness=1, highlightbackground=S_BORDER
 )
 
 chipCanvas.pack(pady=20)
@@ -2326,27 +2385,17 @@ chipCanvas.pack(pady=20)
 def open_segment_reference():
 
     refWindow = ctk.CTkToplevel(app)
-
-    refWindow.title("7 Segment Reference")
-
+    refWindow.title("7-SEG REFERENCE")
     refWindow.geometry("300x420")
-
     refWindow.resizable(False, False)
-
+    refWindow.configure(fg_color=S_BG)
     refWindow.grab_set()
-
-    ctk.CTkLabel(
-        refWindow,
-        text="7 Segment Reference",
-        font=("Arial", 20, "bold")
+    ctk.CTkLabel(refWindow, text="7-SEGMENT REFERENCE",
+        font=(FONT_MONO, 12, "bold"), text_color=S_YELLOW
     ).pack(pady=(15, 10))
-
     guideCanvas = tk.Canvas(
-        refWindow,
-        width=220,
-        height=320,
-        bg="#111111",
-        highlightthickness=0
+        refWindow, width=220, height=320,
+        bg=S_VFD_BG, highlightthickness=1, highlightbackground=S_BORDER
     )
 
     guideCanvas.pack(padx=20, pady=10)
@@ -2357,79 +2406,79 @@ def open_segment_reference():
 
     guideCanvas.create_rectangle(
         70, 20, 150, 35,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         110, 10,
         text="A",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         155, 40, 170, 120,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         185, 80,
         text="B",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         155, 160, 170, 240,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         185, 200,
         text="C",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         70, 245, 150, 260,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         110, 275,
         text="D",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         50, 160, 65, 240,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         30, 200,
         text="E",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         50, 40, 65, 120,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         30, 80,
         text="F",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
     guideCanvas.create_rectangle(
         70, 135, 150, 150,
-        fill="#18f2b2"
+        fill=S_YELLOW
     )
 
     guideCanvas.create_text(
         110, 120,
         text="G",
-        fill="white"
+        fill=S_TEXT_DIM
     )
 
 # =====================================================
@@ -2437,11 +2486,11 @@ def open_segment_reference():
 # =====================================================
 
 segmentInfoButton = ctk.CTkButton(
-    hardwareScroll,
-    text="7 Segment Reference",
-    command=open_segment_reference,
-    width=220,
-    height=36
+    hardwareScroll, text="7-SEG REFERENCE",
+    command=open_segment_reference, width=200, height=30,
+    font=(FONT_MONO, 9), corner_radius=4,
+    fg_color=S_PANEL2, hover_color=S_PANEL,
+    text_color=S_TEXT_DIM, border_width=1, border_color=S_BORDER
 )
 
 segmentInfoButton.pack(pady=(0, 20))
@@ -2456,21 +2505,16 @@ CHIP_TOP = 140
 CHIP_BOTTOM = 380
 
 chipCanvas.create_rectangle(
-    CHIP_LEFT,
-    CHIP_TOP,
-    CHIP_RIGHT,
-    CHIP_BOTTOM,
-    fill="#050505",
-    outline="#555555",
-    width=3
+    CHIP_LEFT, CHIP_TOP, CHIP_RIGHT, CHIP_BOTTOM,
+    fill=S_PANEL2, outline=S_BORDER, width=2
 )
 
 chipCanvas.create_text(
     (CHIP_LEFT + CHIP_RIGHT) / 2,
     (CHIP_TOP + CHIP_BOTTOM) / 2,
     text="MAX6921",
-    fill="#18f2b2",
-    font=("Arial", 34, "bold")
+    fill=S_BORDER,
+    font=(FONT_MONO, 34, "bold")
 )
 
 # =====================================================
@@ -2507,14 +2551,14 @@ def validate_mappings():
     for pin, menu in mappingMenus.items():
 
         menu.configure(
-            fg_color="#1f6f50"
+            fg_color=S_PANEL2
         )
 
         if pin in lineObjects:
 
             chipCanvas.itemconfig(
                 lineObjects[pin],
-                fill="#18f2b2"
+                fill=S_YELLOW
             )
 
     # ==========================================
@@ -2556,12 +2600,12 @@ def validate_mappings():
             for pin in pins:
 
                 mappingMenus[pin].configure(
-                    fg_color="#aa2222"
+                    fg_color=S_RED_MID
                 )
 
                 chipCanvas.itemconfig(
                     lineObjects[pin],
-                    fill="#ff3333"
+                    fill=S_RED_ON
                 )
 
     # ==========================================
@@ -2629,7 +2673,7 @@ def validate_mappings():
 
         mappingStatusLabel.configure(
             text="\n\n".join(problems),
-            text_color="#ff5555"
+            text_color=S_RED
         )
 
         set_status_state("problem")
@@ -2652,7 +2696,7 @@ def validate_mappings():
 
     mappingStatusLabel.configure(
         text="Mapping valid",
-        text_color="#44ff88"
+        text_color=S_GREEN_ON
     )
 
     set_status_state("idle")
@@ -2713,7 +2757,7 @@ for i, pin in enumerate(topPins):
         TOP_Y_PIN - 10,
         x + 8,
         TOP_Y_PIN + 6,
-        fill="#999999",
+        fill=S_BORDER,
         outline=""
     )
 
@@ -2724,7 +2768,7 @@ for i, pin in enumerate(topPins):
         TOP_Y_PIN - 8,
         x,
         TOP_Y_PIN - 50,
-        fill="#888888",
+        fill=S_BORDER2,
         width=6
     )
 
@@ -2734,7 +2778,7 @@ for i, pin in enumerate(topPins):
         x,
         TOP_Y_LABEL,
         text=pin,
-        fill="white",
+        fill=S_TEXT_DIM,
         font=("Arial", 10, "bold")
     )
 
@@ -2749,12 +2793,13 @@ for i, pin in enumerate(topPins):
         mappingVars[pin] = var
 
         menu = ctk.CTkOptionMenu(
-            hardwareScroll,
-            values=mappingOptions,
-            variable=var,
-            width=72,
-            height=24,
-            command=on_mapping_changed
+            hardwareScroll, values=mappingOptions,
+            variable=var, width=72, height=22,
+            command=on_mapping_changed,
+            font=(FONT_MONO, 9), fg_color=S_PANEL2,
+            button_color=S_BORDER, button_hover_color=S_YELLOW_MID,
+            text_color=S_TEXT, dropdown_fg_color=S_PANEL2,
+            dropdown_text_color=S_TEXT, dropdown_hover_color=S_YELLOW_DIM
         )
 
         mappingMenus[pin] = menu
@@ -2772,7 +2817,7 @@ for i, pin in enumerate(topPins):
             TOP_Y_PIN - 40,
             x,
             TOP_Y_MENU + 14,
-            fill="#18f2b2",
+            fill=S_YELLOW,
             width=2
         )
 
@@ -2795,7 +2840,7 @@ for i, pin in enumerate(bottomPins):
         BOTTOM_Y_PIN - 6,
         x + 8,
         BOTTOM_Y_PIN + 10,
-        fill="#999999",
+        fill=S_BORDER,
         outline=""
     )
 
@@ -2806,7 +2851,7 @@ for i, pin in enumerate(bottomPins):
         BOTTOM_Y_PIN + 8,
         x,
         BOTTOM_Y_PIN + 50,
-        fill="#888888",
+        fill=S_BORDER2,
         width=6
     )
 
@@ -2816,7 +2861,7 @@ for i, pin in enumerate(bottomPins):
         x,
         BOTTOM_Y_LABEL,
         text=pin,
-        fill="white",
+        fill=S_TEXT_DIM,
         font=("Arial", 10, "bold")
     )
 
@@ -2831,12 +2876,13 @@ for i, pin in enumerate(bottomPins):
         mappingVars[pin] = var
 
         menu = ctk.CTkOptionMenu(
-            hardwareScroll,
-            values=mappingOptions,
-            variable=var,
-            width=72,
-            height=24,
-            command=on_mapping_changed
+            hardwareScroll, values=mappingOptions,
+            variable=var, width=72, height=22,
+            command=on_mapping_changed,
+            font=(FONT_MONO, 9), fg_color=S_PANEL2,
+            button_color=S_BORDER, button_hover_color=S_YELLOW_MID,
+            text_color=S_TEXT, dropdown_fg_color=S_PANEL2,
+            dropdown_text_color=S_TEXT, dropdown_hover_color=S_YELLOW_DIM
         )
 
         mappingMenus[pin] = menu
@@ -2854,7 +2900,7 @@ for i, pin in enumerate(bottomPins):
             BOTTOM_Y_PIN + 40,
             x,
             BOTTOM_Y_MENU - 14,
-            fill="#18f2b2",
+            fill=S_YELLOW,
             width=2
         )
 
@@ -2964,11 +3010,11 @@ def set_controls_enabled(enabled):
 
     if enabled:
 
-        previewCanvas.configure(bg="black")
+        previewCanvas.configure(bg=S_VFD_BG)
 
     else:
 
-        previewCanvas.configure(bg="#111111")
+        previewCanvas.configure(bg="#030b0a")
 
     # ==========================================
     # RESET BUTTON VISIBILITY
